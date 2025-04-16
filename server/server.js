@@ -5,7 +5,7 @@ const db = require('./db');
 const app = express();
 const PORT = 3000;
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '../public')));
 app.use(express.json());
 
 // API to get all meals
@@ -92,7 +92,7 @@ app.put('/api/meals/:id', (req, res) => {
 
 // Catch-all route to serve the React app's index.html for all non-API routes
 app.get(/^\/(?!api).*/, (req, res) => {
-	res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
+	res.sendFile(path.resolve(__dirname, '../public', 'index.html'));
 });
 
 // ✅ Start the server last

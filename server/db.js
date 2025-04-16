@@ -2,7 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 // Create or open the database file
-const db = new sqlite3.Database(path.join(__dirname, 'meals.db'), (err) => {
+const db = new sqlite3.Database(path.join(__dirname, './meals.db'), (err) => {
 	if (err) {
 		console.error('Failed to open the database:', err.message);
 	} else {
