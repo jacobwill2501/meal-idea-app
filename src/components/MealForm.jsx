@@ -45,7 +45,7 @@ const MealForm = ({ fetchMeals }) => {
 		<Stack spacing={2} mb={2}>
 			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
 				<TextField
-					label="Meal Name"
+					label="Meal Name*"
 					variant="outlined"
 					fullWidth
 					value={newMeal.name}
