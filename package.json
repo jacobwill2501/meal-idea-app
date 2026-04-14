@@ -4,11 +4,20 @@
   "main": "index.js",
   "homepage": "https://jacobwill2501.github.io/meal-idea-app",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "build": "npx webpack",
     "start": "npm run build && node server/server.js",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d public"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "transform": {
+      "^.+\\.[jt]sx?$": "babel-jest"
+    },
+    "moduleNameMapper": {
+      "^../firebase$": "<rootDir>/src/__mocks__/firebase.js"
+    }
   },
   "author": "",
   "license": "ISC",
@@ -17,9 +26,12 @@
     "@babel/core": "^7.26.10",
     "@babel/preset-env": "^7.26.9",
     "@babel/preset-react": "^7.26.3",
+    "babel-jest": "^30.3.0",
     "babel-loader": "^9.2.1",
     "eslint": "^9.24.0",
     "gh-pages": "^6.3.0",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
     "webpack": "^5.99.5",
     "webpack-cli": "^6.0.1",
     "webpack-dev-middleware": "^7.4.2"
