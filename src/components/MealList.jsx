@@ -1,40 +1,55 @@
 import React, { useState } from 'react';
 import {
-	List,
-	ListItem,
-	ListItemText,
-	IconButton,
-	Collapse,
-	Stack,
-	Button,
+  Box,
+  Button,
+  List,
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import MealItem from './MealItem';
 import { deleteMeal } from '../services/firebaseService';
+import { addMealItems } from '../services/groceryService';
 
-const MealList = ({ meals, setMeals, fetchMeals }) => {
-	const [expandedMealId, setExpandedMealId] = useState(null);
+const MealList = ({ meals, setMeals, fetchMeals, weekMeals }) => {
+  const [expandedMealId, setExpandedMealId] = useState(null);
 
-	const handleDeleteMeal = async (id) => {
-		await deleteMeal(id);
-		await fetchMeals();
-	};
+  const handleDeleteMeal = async (id) => {
+    await deleteMeal(id);
+    await fetchMeals();
+  };
 
-	return (
-		<List>
-			{meals.map((meal) => (
-				<MealItem
-					key={meal.id}
-					meal={meal}
-					setMeals={setMeals}
-					expandedMealId={expandedMealId}
-					setExpandedMealId={setExpandedMealId}
-					handleDeleteMeal={handleDeleteMeal}
-				/>
-			))}
-		</List>
-	);
+  const handleAddToGrocery = () => {
+    if (!weekMeals || weekMeals.length === 0) return;
+    addMealItems(weekMeals);
+    alert('Week\'s meals added to Grocery List!');
+  };
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="flex-end" mb={1}>
+        <Button
+          variant="outlined"
+          color="success"
+          startIcon={<ShoppingCartIcon />}
+          onClick={handleAddToGrocery}
+          disabled={!weekMeals || weekMeals.length === 0}
+        >
+          Add Week to Grocery List
+        </Button>
+      </Box>
+      <List>
+        {meals.map((meal) => (
+          <MealItem
+            key={meal.id}
+            meal={meal}
+            setMeals={setMeals}
+            expandedMealId={expandedMealId}
+            setExpandedMealId={setExpandedMealId}
+            handleDeleteMeal={handleDeleteMeal}
+          />
+        ))}
+      </List>
+    </Box>
+  );
 };
 
 export default MealList;
