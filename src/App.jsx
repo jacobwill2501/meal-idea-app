@@ -4,6 +4,7 @@ import MealForm from './components/MealForm';
 import MealList from './components/MealList';
 import MealPlan from './components/MealPlan';
 import Passcode from './components/Passcode';
+import Staples from './components/Staples';
 import { getAllMeals } from './services/firebaseService';
 
 const App = () => {
@@ -49,9 +50,12 @@ const App = () => {
 							centered
 						>
 							<Tab label="Weekly Plan" value="week" />
+							<Tab label="Grocery Staples" value="staples" />
 							<Tab label="Meal Library" value="library" />
 						</Tabs>
 					</Box>
+
+					{view === 'staples' && <Staples />}
 
 					{view === 'week' && (
 						<MealPlan
