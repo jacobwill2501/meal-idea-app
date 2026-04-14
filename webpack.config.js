@@ -5,6 +5,7 @@ module.exports = {
 	output: {
 		filename: 'bundle.js',
 		path: path.resolve(__dirname, 'public'),
+		publicPath: '/meal-idea-app/',
 	},
 	module: {
 		rules: [
@@ -18,5 +19,5 @@ module.exports = {
 	resolve: {
 		extensions: ['.js', '.jsx'],
 	},
-	mode: 'development',
+	mode: 'production',
 };

@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { updateMeal } from '../services/mealStorage';
 
 const MealItem = ({
 	meal,
@@ -40,26 +41,12 @@ const MealItem = ({
 		}
 	}, [expandedMealId, meal]);
 
-	const handleSaveMeal = async () => {
-		const updatedMeal = {
-			...meal,
-			...editFields,
-		};
-
-		const res = await fetch(`/api/meals/${meal.id}`, {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(updatedMeal),
-		});
-
-		if (res.ok) {
-			setMeals((prev) => prev.map((m) => (m.id === meal.id ? updatedMeal : m)));
-			setEditingMeal(false);
-			setExpandedMealId(null);
-		} else {
-			const error = await res.json();
-			alert(error.error);
-		}
+	const handleSaveMeal = () => {
+		const updatedMeal = { ...meal, ...editFields };
+		updateMeal(meal.id, updatedMeal);
+		setMeals((prev) => prev.map((m) => (m.id === meal.id ? updatedMeal : m)));
+		setEditingMeal(false);
+		setExpandedMealId(null);
 	};
 
 	return (

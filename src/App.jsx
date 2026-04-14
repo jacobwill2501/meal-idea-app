@@ -3,16 +3,15 @@ import { Container, Box, Typography, Paper, Tabs, Tab } from '@mui/material';
 import MealForm from './components/MealForm';
 import MealList from './components/MealList';
 import MealPlan from './components/MealPlan';
+import { getAllMeals } from './services/mealStorage';
 
 const App = () => {
 	const [meals, setMeals] = useState([]);
 	const [weekMeals, setWeekMeals] = useState([]);
 	const [view, setView] = useState('week');
 
-	const fetchMeals = async () => {
-		const res = await fetch('/api/meals');
-		const data = await res.json();
-		setMeals(data);
+	const fetchMeals = () => {
+		setMeals(getAllMeals());
 	};
 
 	useEffect(() => {

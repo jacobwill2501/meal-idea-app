@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TextField, Button, Stack, Box } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import { addMeal } from '../services/mealStorage';
 
 const MealForm = ({ fetchMeals }) => {
 	const [newMeal, setNewMeal] = useState({
@@ -11,34 +12,19 @@ const MealForm = ({ fetchMeals }) => {
 		extras: '',
 	});
 
-	const handleAddMeal = async () => {
+	const handleAddMeal = () => {
 		if (!newMeal.name.trim()) return;
 
-		const res = await fetch('/api/meals', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				...newMeal,
-				protein: newMeal.protein.trim(),
-				vegetable: newMeal.vegetable.trim(),
-				carb: newMeal.carb.trim(),
-				extras: newMeal.extras.trim(),
-			}),
+		addMeal({
+			...newMeal,
+			protein: newMeal.protein.trim(),
+			vegetable: newMeal.vegetable.trim(),
+			carb: newMeal.carb.trim(),
+			extras: newMeal.extras.trim(),
 		});
 
-		if (res.ok) {
-			setNewMeal({
-				name: '',
-				protein: '',
-				vegetable: '',
-				carb: '',
-				extras: '',
-			});
-			fetchMeals();
-		} else {
-			const error = await res.json();
-			alert(error.error);
-		}
+		setNewMeal({ name: '', protein: '', vegetable: '', carb: '', extras: '' });
+		fetchMeals();
 	};
 
 	return (

@@ -11,15 +11,14 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MealItem from './MealItem';
+import { deleteMeal } from '../services/mealStorage';
 
 const MealList = ({ meals, setMeals, fetchMeals }) => {
 	const [expandedMealId, setExpandedMealId] = useState(null);
 
-	const handleDeleteMeal = async (id) => {
-		const res = await fetch(`/api/meals/${id}`, {
-			method: 'DELETE',
-		});
-		if (res.ok) fetchMeals();
+	const handleDeleteMeal = (id) => {
+		deleteMeal(id);
+		fetchMeals();
 	};
 
 	return (
