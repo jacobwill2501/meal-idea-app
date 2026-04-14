@@ -11,14 +11,14 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MealItem from './MealItem';
-import { deleteMeal } from '../services/mealStorage';
+import { deleteMeal } from '../services/firebaseService';
 
 const MealList = ({ meals, setMeals, fetchMeals }) => {
 	const [expandedMealId, setExpandedMealId] = useState(null);
 
-	const handleDeleteMeal = (id) => {
-		deleteMeal(id);
-		fetchMeals();
+	const handleDeleteMeal = async (id) => {
+		await deleteMeal(id);
+		await fetchMeals();
 	};
 
 	return (

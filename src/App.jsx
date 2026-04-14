@@ -3,20 +3,34 @@ import { Container, Box, Typography, Paper, Tabs, Tab } from '@mui/material';
 import MealForm from './components/MealForm';
 import MealList from './components/MealList';
 import MealPlan from './components/MealPlan';
-import { getAllMeals } from './services/mealStorage';
+import Passcode from './components/Passcode';
+import { getAllMeals } from './services/firebaseService';
 
 const App = () => {
+	const [unlocked, setUnlocked] = useState(
+		sessionStorage.getItem('unlocked') === 'true'
+	);
 	const [meals, setMeals] = useState([]);
 	const [weekMeals, setWeekMeals] = useState([]);
 	const [view, setView] = useState('week');
 
-	const fetchMeals = () => {
-		setMeals(getAllMeals());
+	const fetchMeals = async () => {
+		const data = await getAllMeals();
+		setMeals(data);
 	};
 
 	useEffect(() => {
-		fetchMeals();
-	}, []);
+		if (unlocked) fetchMeals();
+	}, [unlocked]);
+
+	const handleUnlock = () => {
+		sessionStorage.setItem('unlocked', 'true');
+		setUnlocked(true);
+	};
+
+	if (!unlocked) {
+		return <Passcode onUnlock={handleUnlock} />;
+	}
 
 	return (
 		<Container maxWidth="md" style={{ marginTop: '2rem' }}>
@@ -27,8 +41,6 @@ const App = () => {
 					</Typography>
 
 					<Box my={3}>
-						{' '}
-						{/* Adds vertical spacing (margin y-axis) */}
 						<Tabs
 							value={view}
 							onChange={(_, val) => setView(val)}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TextField, Button, Stack, Box } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import { addMeal } from '../services/mealStorage';
+import { addMeal } from '../services/firebaseService';
 
 const MealForm = ({ fetchMeals }) => {
 	const [newMeal, setNewMeal] = useState({
@@ -12,10 +12,10 @@ const MealForm = ({ fetchMeals }) => {
 		extras: '',
 	});
 
-	const handleAddMeal = () => {
+	const handleAddMeal = async () => {
 		if (!newMeal.name.trim()) return;
 
-		addMeal({
+		await addMeal({
 			...newMeal,
 			protein: newMeal.protein.trim(),
 			vegetable: newMeal.vegetable.trim(),
@@ -24,7 +24,7 @@ const MealForm = ({ fetchMeals }) => {
 		});
 
 		setNewMeal({ name: '', protein: '', vegetable: '', carb: '', extras: '' });
-		fetchMeals();
+		await fetchMeals();
 	};
 
 	return (
@@ -49,9 +49,7 @@ const MealForm = ({ fetchMeals }) => {
 					label="Vegetable/Fiber Option"
 					fullWidth
 					value={newMeal.vegetable}
-					onChange={(e) =>
-						setNewMeal({ ...newMeal, vegetable: e.target.value })
-					}
+					onChange={(e) => setNewMeal({ ...newMeal, vegetable: e.target.value })}
 				/>
 				<TextField
 					label="Carb Option"

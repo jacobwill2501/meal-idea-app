@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { updateMeal } from '../services/mealStorage';
+import { updateMeal } from '../services/firebaseService';
 
 const MealItem = ({
 	meal,
@@ -41,9 +41,9 @@ const MealItem = ({
 		}
 	}, [expandedMealId, meal]);
 
-	const handleSaveMeal = () => {
+	const handleSaveMeal = async () => {
 		const updatedMeal = { ...meal, ...editFields };
-		updateMeal(meal.id, updatedMeal);
+		await updateMeal(meal.id, updatedMeal);
 		setMeals((prev) => prev.map((m) => (m.id === meal.id ? updatedMeal : m)));
 		setEditingMeal(false);
 		setExpandedMealId(null);
@@ -51,7 +51,7 @@ const MealItem = ({
 
 	return (
 		<>
-			<ListItem key={meal.id} divider alignItems="flex-start">
+			<ListItem divider alignItems="flex-start">
 				<Box sx={{ flexGrow: 1 }}>
 					<ListItemText
 						primary={meal.name}
@@ -78,10 +78,7 @@ const MealItem = ({
 										fullWidth
 										value={editFields.vegetable}
 										onChange={(e) =>
-											setEditFields({
-												...editFields,
-												vegetable: e.target.value,
-											})
+											setEditFields({ ...editFields, vegetable: e.target.value })
 										}
 									/>
 									<TextField
