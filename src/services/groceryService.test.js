@@ -43,6 +43,7 @@ jest.mock('firebase/firestore', () => ({
 }));
 
 jest.mock('../firebase', () => ({ db: {} }));
+// Suppress Firebase app initialization errors during module load
 jest.mock('firebase/app', () => ({ initializeApp: jest.fn() }));
 
 beforeEach(() => {
