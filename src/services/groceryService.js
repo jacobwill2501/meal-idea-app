@@ -1,23 +1,29 @@
-const STORAGE_KEY = 'groceryList';
+import { db } from '../firebase';
+import { collection, getDocs, setDoc, updateDoc, doc, writeBatch } from 'firebase/firestore';
 
-export function getList() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-  } catch {
-    return {};
-  }
-}
-
-export function saveList(map) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-}
+const COLLECTION = 'groceryList';
 
 function normalizeKey(text) {
   return text.toLowerCase().trim();
 }
 
-export function addMealItems(weekMeals) {
-  const list = getList();
+export async function getList() {
+  try {
+    const querySnapshot = await getDocs(collection(db, COLLECTION));
+    const list = {};
+    querySnapshot.forEach((document) => {
+      list[document.id] = document.data();
+    });
+    return list;
+  } catch {
+    return {};
+  }
+}
+
+export async function addMealItems(weekMeals) {
+  const list = await getList();
+  const batch = writeBatch(db);
+
   weekMeals.forEach((meal) => {
     [
       { text: meal.protein, mealName: meal.name },
@@ -35,44 +41,59 @@ export function addMealItems(weekMeals) {
       }
     });
   });
-  saveList(list);
+
+  // Batch write all changes
+  Object.entries(list).forEach(([key, data]) => {
+    batch.set(doc(db, COLLECTION, key), data, { merge: true });
+  });
+
+  await batch.commit();
   return list;
 }
 
-export function addStapleItems(staples) {
-  const list = getList();
+export async function addStapleItems(staples) {
+  const list = await getList();
+  const batch = writeBatch(db);
+
   staples.forEach((staple) => {
     if (!staple.name || !staple.name.trim()) return;
     const key = normalizeKey(staple.name);
     if (!list[key]) {
       list[key] = { displayText: staple.name.trim(), count: 0, meals: [], checked: false };
+      batch.set(doc(db, COLLECTION, key), list[key]);
     }
   });
-  saveList(list);
+
+  await batch.commit();
   return list;
 }
 
-export function addManualItem(text) {
+export async function addManualItem(text) {
   if (!text || !text.trim()) return getList();
-  const list = getList();
+  const list = await getList();
   const key = normalizeKey(text);
   if (!list[key]) {
     list[key] = { displayText: text.trim(), count: 0, meals: [], checked: false };
+    await setDoc(doc(db, COLLECTION, key), list[key]);
   }
-  saveList(list);
   return list;
 }
 
-export function toggleItem(key) {
-  const list = getList();
+export async function toggleItem(key) {
+  const list = await getList();
   if (list[key]) {
     list[key].checked = !list[key].checked;
-    saveList(list);
+    await updateDoc(doc(db, COLLECTION, key), { checked: list[key].checked });
   }
   return list;
 }
 
-export function clearList() {
-  localStorage.removeItem(STORAGE_KEY);
+export async function clearList() {
+  const querySnapshot = await getDocs(collection(db, COLLECTION));
+  const batch = writeBatch(db);
+  querySnapshot.forEach((document) => {
+    batch.delete(doc(db, COLLECTION, document.id));
+  });
+  await batch.commit();
   return {};
 }
