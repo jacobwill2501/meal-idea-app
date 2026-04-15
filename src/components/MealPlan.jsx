@@ -49,9 +49,9 @@ const MealPlan = ({ meals, weekMeals, setWeekMeals }) => {
     setNumOfMeals(e.target.value);
   };
 
-  const handleAddToGrocery = () => {
+  const handleAddToGrocery = async () => {
     if (weekMeals.length === 0) return;
-    addMealItems(weekMeals);
+    await addMealItems(weekMeals);
     alert('Week\'s meals added to Grocery List!');
   };
 

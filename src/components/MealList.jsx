@@ -17,9 +17,9 @@ const MealList = ({ meals, setMeals, fetchMeals, weekMeals }) => {
     await fetchMeals();
   };
 
-  const handleAddToGrocery = () => {
+  const handleAddToGrocery = async () => {
     if (!weekMeals || weekMeals.length === 0) return;
-    addMealItems(weekMeals);
+    await addMealItems(weekMeals);
     alert('Week\'s meals added to Grocery List!');
   };
 

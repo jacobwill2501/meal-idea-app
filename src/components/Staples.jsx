@@ -64,8 +64,8 @@ const Staples = () => {
     setStaples((prev) => prev.map((s) => ({ ...s, checked: false })));
   };
 
-  const handleAddToGrocery = () => {
-    addStapleItems(staples);
+  const handleAddToGrocery = async () => {
+    await addStapleItems(staples);
     alert('Staples added to Grocery List!');
   };
 

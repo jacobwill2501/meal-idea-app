@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Checkbox,
+  CircularProgress,
   Divider,
   List,
   ListItem,
@@ -25,44 +26,52 @@ import { getAllStaples } from '../services/staplesService';
 const GroceryList = ({ weekMeals }) => {
   const [list, setList] = useState({});
   const [newItem, setNewItem] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setList(getList());
+    (async () => {
+      const data = await getList();
+      setList(data);
+      setLoading(false);
+    })();
   }, []);
 
-  const refresh = () => setList({ ...getList() });
+  const refresh = async () => {
+    const data = await getList();
+    setList({ ...data });
+  };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newItem.trim()) return;
-    addManualItem(newItem.trim());
+    await addManualItem(newItem.trim());
     setNewItem('');
-    refresh();
+    await refresh();
   };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleAdd();
   };
 
-  const handleAddMealPlan = () => {
+  const handleAddMealPlan = async () => {
     if (!weekMeals || weekMeals.length === 0) return;
-    addMealItems(weekMeals);
-    refresh();
+    await addMealItems(weekMeals);
+    await refresh();
   };
 
   const handleAddStaples = async () => {
     const staples = await getAllStaples();
-    addStapleItems(staples);
-    refresh();
+    await addStapleItems(staples);
+    await refresh();
   };
 
-  const handleClear = () => {
-    clearList();
-    refresh();
+  const handleClear = async () => {
+    await clearList();
+    await refresh();
   };
 
-  const handleToggle = (key) => {
-    toggleItem(key);
-    refresh();
+  const handleToggle = async (key) => {
+    await toggleItem(key);
+    await refresh();
   };
 
   const formatLabel = (key, value) => {
@@ -71,6 +80,14 @@ const GroceryList = ({ weekMeals }) => {
     }
     return value.displayText;
   };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   const entries = Object.entries(list);
   const unchecked = entries.filter(([, v]) => !v.checked);
