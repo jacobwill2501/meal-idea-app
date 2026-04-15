@@ -23,6 +23,7 @@ export async function getList() {
 export async function addMealItems(weekMeals) {
   const list = await getList();
   const batch = writeBatch(db);
+  const modifiedKeys = new Set();
 
   weekMeals.forEach((meal) => {
     [
@@ -39,12 +40,13 @@ export async function addMealItems(weekMeals) {
       } else {
         list[key] = { displayText: text.trim(), count: 1, meals: [mealName], checked: false };
       }
+      modifiedKeys.add(key);
     });
   });
 
-  // Batch write all changes
-  Object.entries(list).forEach(([key, data]) => {
-    batch.set(doc(db, COLLECTION, key), data, { merge: true });
+  // Batch write only modified keys
+  modifiedKeys.forEach((key) => {
+    batch.set(doc(db, COLLECTION, key), list[key], { merge: true });
   });
 
   await batch.commit();
@@ -69,7 +71,7 @@ export async function addStapleItems(staples) {
 }
 
 export async function addManualItem(text) {
-  if (!text || !text.trim()) return getList();
+  if (!text || !text.trim()) return {};
   const list = await getList();
   const key = normalizeKey(text);
   if (!list[key]) {
