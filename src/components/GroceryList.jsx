@@ -49,7 +49,7 @@ const GroceryList = ({ weekMeals }) => {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') handleAdd();
+    if (e.key === 'Enter') handleAdd().catch(console.error);
   };
 
   const handleAddMealPlan = async () => {

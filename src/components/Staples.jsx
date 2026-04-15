@@ -65,8 +65,13 @@ const Staples = () => {
   };
 
   const handleAddToGrocery = async () => {
-    await addStapleItems(staples);
-    alert('Staples added to Grocery List!');
+    try {
+      await addStapleItems(staples);
+      alert('Staples added to Grocery List!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to add staples to Grocery List.');
+    }
   };
 
   const unchecked = staples.filter((s) => !s.checked);
