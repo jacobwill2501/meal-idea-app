@@ -26,21 +26,18 @@ export async function addMealItems(weekMeals) {
   const modifiedKeys = new Set();
 
   weekMeals.forEach((meal) => {
-    [
-      { text: meal.protein, mealName: meal.name },
-      { text: meal.vegetable, mealName: meal.name },
-      { text: meal.carb, mealName: meal.name },
-      { text: meal.extras, mealName: meal.name },
-    ].forEach(({ text, mealName }) => {
-      if (!text || !text.trim()) return;
-      const key = normalizeKey(text);
-      if (list[key]) {
-        list[key].count += 1;
-        list[key].meals.push(mealName);
-      } else {
-        list[key] = { displayText: text.trim(), count: 1, meals: [mealName], checked: false };
-      }
-      modifiedKeys.add(key);
+    [meal.protein, meal.vegetable, meal.carb, meal.extras].forEach((field) => {
+      if (!field || !field.trim()) return;
+      field.split(',').map((t) => t.trim()).filter(Boolean).forEach((text) => {
+        const key = normalizeKey(text);
+        if (list[key]) {
+          list[key].count += 1;
+          list[key].meals.push(meal.name);
+        } else {
+          list[key] = { displayText: text, count: 1, meals: [meal.name], checked: false };
+        }
+        modifiedKeys.add(key);
+      });
     });
   });
 
