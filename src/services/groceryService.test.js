@@ -95,6 +95,39 @@ describe('addMealItems', () => {
     const list = await addMealItems(meals);
     expect(list['grilled chicken']).toBeDefined();
   });
+
+  it('splits comma-separated extras into individual items', async () => {
+    const meals = [{ name: 'Stir Fry', protein: 'Tofu', vegetable: 'Broccoli', carb: 'Rice', extras: 'soy sauce, sesame oil, garlic' }];
+    const list = await addMealItems(meals);
+    expect(list['soy sauce']).toBeDefined();
+    expect(list['sesame oil']).toBeDefined();
+    expect(list['garlic']).toBeDefined();
+    expect(list['soy sauce, sesame oil, garlic']).toBeUndefined();
+  });
+
+  it('splits comma-separated protein into individual items', async () => {
+    const meals = [{ name: 'Bowl', protein: 'chicken, shrimp', vegetable: '', carb: '', extras: '' }];
+    const list = await addMealItems(meals);
+    expect(list['chicken']).toBeDefined();
+    expect(list['shrimp']).toBeDefined();
+    expect(list['chicken, shrimp']).toBeUndefined();
+  });
+
+  it('trims whitespace around comma-separated values', async () => {
+    const meals = [{ name: 'Tacos', protein: '', vegetable: '', carb: '', extras: '  lime juice  ,  cilantro  ' }];
+    const list = await addMealItems(meals);
+    expect(list['lime juice']).toBeDefined();
+    expect(list['lime juice'].displayText).toBe('lime juice');
+    expect(list['cilantro']).toBeDefined();
+  });
+
+  it('skips empty segments from double-commas or trailing commas', async () => {
+    const meals = [{ name: 'Burritos', protein: '', vegetable: '', carb: '', extras: 'salsa,,  , guac' }];
+    const list = await addMealItems(meals);
+    expect(Object.keys(list).length).toBe(2);
+    expect(list['salsa']).toBeDefined();
+    expect(list['guac']).toBeDefined();
+  });
 });
 
 describe('addStapleItems', () => {
