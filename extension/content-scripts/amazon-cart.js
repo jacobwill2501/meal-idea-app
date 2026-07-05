@@ -32,10 +32,10 @@ function saveQueue(queue, callback) {
   });
 }
 
-function recordResult(queue, index, status) {
+function recordResult(queue, index, status, extra) {
   const results = Array.isArray(queue.results) ? queue.results.slice() : [];
   const item = queue.items[index];
-  results[index] = { name: item.name, quantity: item.quantity, status };
+  results[index] = { name: item.name, quantity: item.quantity, status, ...(extra || {}) };
 
   const nextIndex = index + 1;
   const updatedQueue = {
@@ -52,16 +52,8 @@ function recordResult(queue, index, status) {
   });
 }
 
-function markNotFound(queue, index) {
-  recordResult(queue, index, 'not_found');
-}
-
-function markAmbiguous(queue, index) {
-  recordResult(queue, index, 'ambiguous');
-}
-
-function markAdded(queue, index) {
-  recordResult(queue, index, 'added');
+function markNotFound(queue, index, extra) {
+  recordResult(queue, index, 'not_found', extra);
 }
 
 // Best-effort: find search result containers on the page. Unverified
@@ -69,6 +61,28 @@ function markAdded(queue, index) {
 function findSearchResults() {
   const results = document.querySelectorAll('[data-component-type="s-search-result"]');
   return results ? Array.from(results) : [];
+}
+
+// Best-effort: extract comparable candidate data from search-result
+// containers. data-asin is among Amazon's more stable attributes, but all
+// inner selectors here are unverified placeholders.
+function captureCandidates(resultEls) {
+  return resultEls
+    .slice(0, 5)
+    .map((el) => {
+      const asin = el.getAttribute('data-asin');
+      if (!asin) return null;
+      const titleEl = el.querySelector('h2 a span, h2 span');
+      const priceEl = el.querySelector('.a-price .a-offscreen');
+      const imgEl = el.querySelector('img.s-image');
+      return {
+        asin,
+        title: titleEl ? titleEl.textContent.trim() : null,
+        price: priceEl ? priceEl.textContent.trim() : null,
+        imageUrl: imgEl ? imgEl.src : null,
+      };
+    })
+    .filter(Boolean);
 }
 
 // Best-effort: find an "Add to Cart" control within a given result element.
@@ -143,19 +157,21 @@ function processCurrentItem(queue) {
       return;
     }
 
-    if (results.length > 1) {
-      // Multiple results and no reliable way (yet) to disambiguate which
-      // one the user actually wants — flag for manual review rather than
-      // guessing.
-      markAmbiguous(queue, currentIndex);
+    const candidates = captureCandidates(results);
+    const { decision, best } = GroceryMatcher.pickBest(item.name, candidates);
+
+    if (decision !== 'auto_add') {
+      recordResult(queue, currentIndex, 'ambiguous', { candidates });
       return;
     }
 
-    const resultEl = results[0];
+    const resultEl = results.find((el) => el.getAttribute('data-asin') === best.asin);
     const addToCartControl = findAddToCartControl(resultEl);
 
     if (!addToCartControl) {
-      markNotFound(queue, currentIndex);
+      // Confident match but no way to add it from the search page — let the
+      // user resolve it from the popup picker instead of failing outright.
+      recordResult(queue, currentIndex, 'ambiguous', { candidates });
       return;
     }
 
@@ -165,14 +181,14 @@ function processCurrentItem(queue) {
       addToCartControl.click();
     } catch (err) {
       console.warn('[amazon-cart] add-to-cart click failed:', err);
-      markNotFound(queue, currentIndex);
+      markNotFound(queue, currentIndex, { candidates });
       return;
     }
 
     // Give the click a moment to register (cart update, confirmation
     // modal, etc.) before we consider the item added.
     setTimeout(() => {
-      markAdded(queue, currentIndex);
+      recordResult(queue, currentIndex, 'added', { candidates, addedAsin: best.asin });
     }, SETTLE_DELAY_MS);
   }, SETTLE_DELAY_MS);
 }

@@ -33,7 +33,7 @@
     },
     {
       "matches": ["https://www.amazon.com/*"],
-      "js": ["content-scripts/amazon-cart.js"],
+      "js": ["lib/matcher.js", "content-scripts/amazon-cart.js"],
       "run_at": "document_idle"
     }
   ]
