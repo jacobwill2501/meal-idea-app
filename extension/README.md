@@ -72,9 +72,9 @@ Automated mode now learns your product choices:
   click the product you want. That choice is **pinned** (stored in
   `chrome.storage.local` under `pinnedProducts`) and the item is re-added
   immediately via its product page.
-- **Every run after:** pinned items skip search entirely and are added from
-  their product page (`amazon.com/dp/<ASIN>`), the most stable automation
-  path. Only new list items ever hit the search heuristic.
+- **Every run after:** pinned items skip the matching heuristic and are added
+  from their product page (`amazon.com/dp/<ASIN>`), the most stable
+  automation path. Only new list items ever hit the search heuristic.
 - **Corrections:** auto-added items show a *Wrong item?* link to re-pick and
   pin (remove the wrong product from your cart manually). Pinned rows show a
   📌 with an *Unpin* control if a product goes stale.

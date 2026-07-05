@@ -29,16 +29,24 @@ function isOnProductPageFor(asin) {
   return window.location.pathname.includes(`/dp/${asin}`);
 }
 
-function getQueue(callback) {
-  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
-    callback(result[CART_QUEUE_KEY]);
-  });
-}
-
 function saveQueue(queue, callback) {
   chrome.storage.local.set({ [CART_QUEUE_KEY]: queue }, () => {
     if (callback) callback();
   });
+}
+
+// Starting at `fromIndex`, walk forward past any indices that already hold
+// a recorded result (all recorded statuses — added/ambiguous/not_found —
+// are terminal). Retry clears the slot it rewinds to before re-navigating,
+// so a cleared (undefined) slot halts the walk and is returned as the next
+// index to process. Returns queue.items.length if nothing remains.
+function firstUnresolvedIndex(queue, fromIndex) {
+  const results = queue.results || [];
+  let idx = fromIndex;
+  while (idx < queue.items.length && results[idx]) {
+    idx += 1;
+  }
+  return idx;
 }
 
 function recordResult(queue, index, status, extra) {
@@ -46,7 +54,10 @@ function recordResult(queue, index, status, extra) {
   const item = queue.items[index];
   results[index] = { name: item.name, quantity: item.quantity, status, ...(extra || {}) };
 
-  const nextIndex = index + 1;
+  // Advance past any subsequent items that already have a recorded result
+  // (left over from before a retry rewound currentIndex) so we don't
+  // re-process — and re-add to the cart — items that already completed.
+  const nextIndex = firstUnresolvedIndex({ items: queue.items, results }, index + 1);
   const updatedQueue = {
     ...queue,
     results,
@@ -184,6 +195,20 @@ function processCurrentItem(queue, pinned) {
 
   if (!Array.isArray(items) || currentIndex >= items.length) {
     // Queue is already complete or malformed; nothing to do.
+    return;
+  }
+
+  if (Array.isArray(queue.results) && queue.results[currentIndex]) {
+    // currentIndex already has a recorded result (e.g. storage left
+    // mid-state) — skip forward past it and any other already-resolved
+    // items instead of re-processing (and re-adding to the cart).
+    const nextIndex = firstUnresolvedIndex(queue, currentIndex + 1);
+    saveQueue({ ...queue, currentIndex: nextIndex }, () => {
+      if (nextIndex < items.length) {
+        window.location.href = wholeFoodsSearchUrl(items[nextIndex].name);
+      }
+      // Otherwise the queue is complete; nothing further to navigate to.
+    });
     return;
   }
 
