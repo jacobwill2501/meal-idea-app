@@ -3,6 +3,7 @@
 // hands-on iteration before this reliably adds anything to a real cart.
 
 const CART_QUEUE_KEY = 'cartQueue';
+const PINNED_KEY = 'pinnedProducts';
 const SETTLE_DELAY_MS = 800;
 
 function wholeFoodsSearchUrl(itemName) {
@@ -18,6 +19,14 @@ function isOnSearchPageFor(itemName) {
   const k = url.searchParams.get('k') || '';
   // Loose match: the search term should be present (case-insensitive).
   return k.toLowerCase() === itemName.toLowerCase();
+}
+
+function productPageUrl(asin) {
+  return `https://www.amazon.com/dp/${encodeURIComponent(asin)}`;
+}
+
+function isOnProductPageFor(asin) {
+  return window.location.pathname.includes(`/dp/${asin}`);
 }
 
 function getQueue(callback) {
@@ -126,7 +135,51 @@ function setQuantity(resultEl, quantity) {
   }
 }
 
-function processCurrentItem(queue) {
+// Pinned items skip search entirely: the product page's add-to-cart
+// controls (#add-to-cart-button, #quantity) are far more stable than
+// search-results markup. Selectors still unverified pending live use.
+function processPinnedItem(queue, index, item, pin) {
+  if (!isOnProductPageFor(pin.asin)) {
+    window.location.href = productPageUrl(pin.asin);
+    return;
+  }
+
+  setTimeout(() => {
+    const addBtn = document.getElementById('add-to-cart-button');
+    if (!addBtn) {
+      // Product gone or page layout unrecognized — surface for manual
+      // recovery (popup offers retry / open manually / unpin).
+      recordResult(queue, index, 'not_found', { pinnedAsin: pin.asin });
+      return;
+    }
+
+    const qtySelect = document.getElementById('quantity');
+    const quantity = item.quantity || 1;
+    if (qtySelect && qtySelect.tagName === 'SELECT') {
+      const optionExists = Array.from(qtySelect.options).some(
+        (opt) => opt.value === String(quantity)
+      );
+      if (optionExists) {
+        qtySelect.value = String(quantity);
+        qtySelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+
+    try {
+      addBtn.click();
+    } catch (err) {
+      console.warn('[amazon-cart] pinned add-to-cart click failed:', err);
+      recordResult(queue, index, 'not_found', { pinnedAsin: pin.asin });
+      return;
+    }
+
+    setTimeout(() => {
+      recordResult(queue, index, 'added', { addedAsin: pin.asin });
+    }, SETTLE_DELAY_MS);
+  }, SETTLE_DELAY_MS);
+}
+
+function processCurrentItem(queue, pinned) {
   const { currentIndex, items } = queue;
 
   if (!Array.isArray(items) || currentIndex >= items.length) {
@@ -137,6 +190,12 @@ function processCurrentItem(queue) {
   const item = items[currentIndex];
   if (!item || !item.name) {
     markNotFound(queue, currentIndex);
+    return;
+  }
+
+  const pin = pinned[GroceryMatcher.normalizeKey(item.name)];
+  if (pin && pin.asin) {
+    processPinnedItem(queue, currentIndex, item, pin);
     return;
   }
 
@@ -194,7 +253,9 @@ function processCurrentItem(queue) {
 }
 
 function init() {
-  getQueue((queue) => {
+  chrome.storage.local.get([CART_QUEUE_KEY, PINNED_KEY], (result) => {
+    const queue = result[CART_QUEUE_KEY];
+    const pinned = result[PINNED_KEY] || {};
     if (!queue || !Array.isArray(queue.items) || queue.items.length === 0) {
       return;
     }
@@ -202,7 +263,7 @@ function init() {
       // Already complete, nothing to do on this load.
       return;
     }
-    processCurrentItem(queue);
+    processCurrentItem(queue, pinned);
   });
 }
 
