@@ -237,3 +237,24 @@ body {
   cursor: pointer;
   text-decoration: underline;
 }
+
+.section-utility {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid #e0e0e0;
+  text-align: center;
+}
+
+.btn-muted {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  color: #888;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-muted:hover {
+  color: #555;
+}
