@@ -4,8 +4,10 @@ import {
   addStapleItems,
   addManualItem,
   toggleItem,
+  updateQuantity,
   clearList,
 } from './groceryService';
+import { updateDoc } from 'firebase/firestore';
 
 // Must use var so the jest.mock hoisting can reference it
 var fakeStore = {};
@@ -48,6 +50,7 @@ jest.mock('firebase/app', () => ({ initializeApp: jest.fn() }));
 
 beforeEach(() => {
   Object.keys(fakeStore).forEach(k => delete fakeStore[k]);
+  jest.clearAllMocks();
 });
 
 describe('getList', () => {
@@ -58,6 +61,16 @@ describe('getList', () => {
   it('returns parsed object from Firestore', async () => {
     fakeStore['chicken'] = { displayText: 'Chicken', count: 1, meals: ['Tacos'], checked: false };
     expect(await getList()).toEqual({ chicken: { displayText: 'Chicken', count: 1, meals: ['Tacos'], checked: false } });
+  });
+
+  it('coerces old meal-frequency or zero counts up to at least 1', async () => {
+    fakeStore['eggs'] = { displayText: 'Eggs', count: 0, meals: [], checked: false };
+    fakeStore['chicken'] = { displayText: 'Chicken', count: 4, meals: ['Tacos', 'Bowl'], checked: false };
+    fakeStore['rice'] = { displayText: 'Rice', meals: [], checked: false };
+    const list = await getList();
+    expect(list['eggs'].count).toBe(1);
+    expect(list['chicken'].count).toBe(4);
+    expect(list['rice'].count).toBe(1);
   });
 });
 
@@ -78,16 +91,27 @@ describe('addMealItems', () => {
     expect(Object.keys(list).length).toBe(3);
   });
 
-  it('deduplicates across two meals and increments count', async () => {
+  it('deduplicates across two meals without incrementing count', async () => {
     const meals = [
       { name: 'Tacos', protein: 'Chicken', vegetable: 'Peppers', carb: 'Rice', extras: '' },
       { name: 'Stir Fry', protein: 'Chicken', vegetable: 'Broccoli', carb: 'Rice', extras: '' },
     ];
     const list = await addMealItems(meals);
-    expect(list['chicken'].count).toBe(2);
+    expect(list['chicken'].count).toBe(1);
     expect(list['chicken'].meals).toEqual(['Tacos', 'Stir Fry']);
-    expect(list['rice'].count).toBe(2);
+    expect(list['rice'].count).toBe(1);
     expect(list['peppers'].count).toBe(1);
+  });
+
+  it('re-syncing the same meal twice does not duplicate meal names or reset an adjusted count', async () => {
+    const meal = { name: 'Tacos', protein: 'Chicken', vegetable: 'Peppers', carb: 'Rice', extras: '' };
+    await addMealItems([meal]);
+    await updateQuantity('chicken', 5);
+
+    const list = await addMealItems([meal]);
+
+    expect(list['chicken'].meals).toEqual(['Tacos']);
+    expect(list['chicken'].count).toBe(5);
   });
 
   it('normalizes keys to lowercase', async () => {
@@ -131,9 +155,9 @@ describe('addMealItems', () => {
 });
 
 describe('addStapleItems', () => {
-  it('adds staple names with count 0', async () => {
+  it('adds staple names with count 1', async () => {
     const list = await addStapleItems([{ id: '1', name: 'Eggs', checked: false }]);
-    expect(list['eggs']).toEqual({ displayText: 'Eggs', count: 0, meals: [], checked: false });
+    expect(list['eggs']).toEqual({ displayText: 'Eggs', count: 1, meals: [], checked: false });
   });
 
   it('does not overwrite an existing meal entry', async () => {
@@ -146,9 +170,9 @@ describe('addStapleItems', () => {
 });
 
 describe('addManualItem', () => {
-  it('adds a new item with count 0', async () => {
+  it('adds a new item with count 1', async () => {
     const list = await addManualItem('Olive Oil');
-    expect(list['olive oil']).toEqual({ displayText: 'Olive Oil', count: 0, meals: [], checked: false });
+    expect(list['olive oil']).toEqual({ displayText: 'Olive Oil', count: 1, meals: [], checked: false });
   });
 
   it('does not overwrite an existing entry', async () => {
@@ -177,6 +201,30 @@ describe('toggleItem', () => {
     await toggleItem('eggs');
     const list = await toggleItem('eggs');
     expect(list['eggs'].checked).toBe(false);
+  });
+});
+
+describe('updateQuantity', () => {
+  it('sets the count for an existing item', async () => {
+    await addManualItem('Eggs');
+    const list = await updateQuantity('eggs', 6);
+    expect(list['eggs'].count).toBe(6);
+    const stored = await getList();
+    expect(stored['eggs'].count).toBe(6);
+  });
+
+  it('clamps a value below 1 up to 1', async () => {
+    await addManualItem('Eggs');
+    const list = await updateQuantity('eggs', 0);
+    expect(list['eggs'].count).toBe(1);
+    const list2 = await updateQuantity('eggs', -5);
+    expect(list2['eggs'].count).toBe(1);
+  });
+
+  it('no-ops safely on a nonexistent key', async () => {
+    const list = await updateQuantity('does-not-exist', 3);
+    expect(list['does-not-exist']).toBeUndefined();
+    expect(updateDoc).not.toHaveBeenCalled();
   });
 });
 

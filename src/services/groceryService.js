@@ -14,6 +14,9 @@ export async function getList() {
     querySnapshot.forEach((document) => {
       list[document.id] = document.data();
     });
+    Object.values(list).forEach((item) => {
+      item.count = Math.max(1, item.count || 1);
+    });
     return list;
   } catch {
     return {};
@@ -31,8 +34,9 @@ export async function addMealItems(weekMeals) {
       field.split(',').map((t) => t.trim()).filter(Boolean).forEach((text) => {
         const key = normalizeKey(text);
         if (list[key]) {
-          list[key].count += 1;
-          list[key].meals.push(meal.name);
+          if (!list[key].meals.includes(meal.name)) {
+            list[key].meals.push(meal.name);
+          }
         } else {
           list[key] = { displayText: text, count: 1, meals: [meal.name], checked: false };
         }
@@ -58,7 +62,7 @@ export async function addStapleItems(staples) {
     if (!staple.name || !staple.name.trim()) return;
     const key = normalizeKey(staple.name);
     if (!list[key]) {
-      list[key] = { displayText: staple.name.trim(), count: 0, meals: [], checked: false };
+      list[key] = { displayText: staple.name.trim(), count: 1, meals: [], checked: false };
       batch.set(doc(db, COLLECTION, key), list[key]);
     }
   });
@@ -72,7 +76,7 @@ export async function addManualItem(text) {
   const list = await getList();
   const key = normalizeKey(text);
   if (!list[key]) {
-    list[key] = { displayText: text.trim(), count: 0, meals: [], checked: false };
+    list[key] = { displayText: text.trim(), count: 1, meals: [], checked: false };
     await setDoc(doc(db, COLLECTION, key), list[key]);
   }
   return list;
@@ -83,6 +87,16 @@ export async function toggleItem(key) {
   if (list[key]) {
     list[key].checked = !list[key].checked;
     await updateDoc(doc(db, COLLECTION, key), { checked: list[key].checked });
+  }
+  return list;
+}
+
+export async function updateQuantity(key, quantity) {
+  const list = await getList();
+  if (list[key]) {
+    const safeQuantity = Math.max(1, quantity);
+    list[key].count = safeQuantity;
+    await updateDoc(doc(db, COLLECTION, key), { count: safeQuantity });
   }
   return list;
 }
