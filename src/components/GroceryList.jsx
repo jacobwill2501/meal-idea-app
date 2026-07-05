@@ -1,17 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
   Checkbox,
   CircularProgress,
   Divider,
+  FormControlLabel,
+  IconButton,
   List,
   ListItem,
   ListItemText,
   Stack,
+  Switch,
   TextField,
+  Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import {
   getList,
@@ -19,6 +24,7 @@ import {
   addStapleItems,
   addManualItem,
   toggleItem,
+  updateQuantity,
   clearList,
 } from '../services/groceryService';
 import { getAllStaples } from '../services/staplesService';
@@ -27,6 +33,7 @@ const GroceryList = ({ weekMeals }) => {
   const [list, setList] = useState({});
   const [newItem, setNewItem] = useState('');
   const [loading, setLoading] = useState(true);
+  const [exportAll, setExportAll] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -74,27 +81,68 @@ const GroceryList = ({ weekMeals }) => {
     await refresh();
   };
 
+  const handleQuantityChange = async (key, newCount) => {
+    if (newCount < 1) return;
+    await updateQuantity(key, newCount);
+    await refresh();
+  };
+
   const formatLabel = (key, value) => {
-    if (value.count > 1) {
-      return `${value.displayText} x${value.count} (${value.meals.join(', ')})`;
+    if (value.meals.length > 0) {
+      return `${value.displayText} (${value.meals.join(', ')})`;
     }
     return value.displayText;
   };
-
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   const entries = Object.entries(list);
   const unchecked = entries.filter(([, v]) => !v.checked);
   const checked = entries.filter(([, v]) => v.checked);
 
+  const exportPayload = useMemo(() => {
+    const source = exportAll ? entries : unchecked;
+    return {
+      exportedAt: new Date().toISOString(),
+      items: source.map(([, value]) => ({
+        name: value.displayText,
+        quantity: value.count,
+      })),
+    };
+  }, [list, exportAll]);
+
+  const exportJson = JSON.stringify(exportPayload).replace(/</g, '\\u003c');
+
+  const exportDataScript = (
+    <script
+      type="application/json"
+      id="grocery-export-data"
+      dangerouslySetInnerHTML={{ __html: exportJson }}
+    />
+  );
+
+  if (loading) {
+    return (
+      <>
+        {exportDataScript}
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+          <CircularProgress />
+        </Box>
+      </>
+    );
+  }
+
   return (
     <Box>
+      {exportDataScript}
+      <FormControlLabel
+        control={
+          <Switch
+            checked={exportAll}
+            onChange={(e) => setExportAll(e.target.checked)}
+          />
+        }
+        label={exportAll ? 'Exporting all items' : 'Exporting unchecked items only'}
+        sx={{ mb: 1 }}
+      />
       <Stack direction="row" spacing={2} mb={2}>
         <TextField
           label="Add item"
@@ -132,7 +180,32 @@ const GroceryList = ({ weekMeals }) => {
 
       <List disablePadding>
         {unchecked.map(([key, value]) => (
-          <ListItem key={key} disableGutters>
+          <ListItem
+            key={key}
+            disableGutters
+            secondaryAction={
+              <Stack direction="row" spacing={1} alignItems="center">
+                <IconButton
+                  size="small"
+                  aria-label={`decrease quantity of ${value.displayText}`}
+                  disabled={value.count <= 1}
+                  onClick={() => handleQuantityChange(key, value.count - 1)}
+                >
+                  <RemoveIcon fontSize="small" />
+                </IconButton>
+                <Typography variant="body2" sx={{ minWidth: '1.5em', textAlign: 'center' }}>
+                  {value.count}
+                </Typography>
+                <IconButton
+                  size="small"
+                  aria-label={`increase quantity of ${value.displayText}`}
+                  onClick={() => handleQuantityChange(key, value.count + 1)}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            }
+          >
             <Checkbox checked={false} onChange={() => handleToggle(key)} />
             <ListItemText primary={formatLabel(key, value)} />
           </ListItem>
