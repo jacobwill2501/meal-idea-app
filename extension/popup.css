@@ -159,3 +159,14 @@ body {
   background: #eee;
   color: #666;
 }
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-small {
+  padding: 3px 7px;
+  font-size: 11px;
+}
