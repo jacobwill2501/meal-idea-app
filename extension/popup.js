@@ -5,6 +5,7 @@
 
 const EXPORT_KEY = 'groceryExport';
 const CART_QUEUE_KEY = 'cartQueue';
+const PINNED_KEY = 'pinnedProducts';
 const AMAZON_MATCH_PATTERN = 'https://www.amazon.com/*';
 
 const exportMetaEl = document.getElementById('export-meta');
@@ -101,7 +102,64 @@ function statusLabel(status) {
   }
 }
 
-function renderCartQueue(queue) {
+function pinAndRerun(index, candidate) {
+  chrome.storage.local.get([CART_QUEUE_KEY, PINNED_KEY], (result) => {
+    const queue = result[CART_QUEUE_KEY];
+    if (!queue || !Array.isArray(queue.items) || !queue.items[index]) {
+      return;
+    }
+    const pinned = result[PINNED_KEY] || {};
+    const key = GroceryMatcher.normalizeKey(queue.items[index].name);
+    pinned[key] = {
+      asin: candidate.asin,
+      title: candidate.title || null,
+      pinnedAt: new Date().toISOString(),
+    };
+    chrome.storage.local.set({ [PINNED_KEY]: pinned }, () => {
+      retryItem(index);
+    });
+  });
+}
+
+function renderCandidatePicker(item, index, candidates) {
+  const picker = document.createElement('ul');
+  picker.className = 'candidate-list';
+
+  candidates.forEach((candidate) => {
+    const li = document.createElement('li');
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'candidate';
+    btn.addEventListener('click', () => pinAndRerun(index, candidate));
+
+    if (candidate.imageUrl) {
+      const img = document.createElement('img');
+      img.src = candidate.imageUrl;
+      img.alt = '';
+      btn.appendChild(img);
+    }
+
+    const label = document.createElement('span');
+    label.className = 'candidate-title';
+    label.textContent = candidate.title || candidate.asin;
+    btn.appendChild(label);
+
+    if (candidate.price) {
+      const price = document.createElement('span');
+      price.className = 'candidate-price';
+      price.textContent = candidate.price;
+      btn.appendChild(price);
+    }
+
+    li.appendChild(btn);
+    picker.appendChild(li);
+  });
+
+  return picker;
+}
+
+function renderCartQueue(queue, pinned) {
   cartQueueListEl.innerHTML = '';
 
   if (!queue || !Array.isArray(queue.items)) {
@@ -162,6 +220,11 @@ function renderCartQueue(queue) {
 
     li.appendChild(info);
     li.appendChild(actions);
+
+    if (status === 'ambiguous' && result && Array.isArray(result.candidates) && result.candidates.length > 0) {
+      li.appendChild(renderCandidatePicker(item, index, result.candidates));
+    }
+
     cartQueueListEl.appendChild(li);
   });
 }
@@ -237,8 +300,8 @@ function retryItem(index) {
 }
 
 function loadCartQueue() {
-  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
-    renderCartQueue(result[CART_QUEUE_KEY]);
+  chrome.storage.local.get([CART_QUEUE_KEY, PINNED_KEY], (result) => {
+    renderCartQueue(result[CART_QUEUE_KEY], result[PINNED_KEY] || {});
   });
 }
 
@@ -271,8 +334,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (changes[EXPORT_KEY]) {
     renderExport(changes[EXPORT_KEY].newValue);
   }
-  if (changes[CART_QUEUE_KEY]) {
-    renderCartQueue(changes[CART_QUEUE_KEY].newValue);
+  if (changes[CART_QUEUE_KEY] || changes[PINNED_KEY]) {
+    loadCartQueue();
   }
 });
 
