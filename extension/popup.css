@@ -219,3 +219,21 @@ body {
   font-size: 12px;
   font-weight: 600;
 }
+
+.pin-indicator {
+  display: block;
+  font-size: 11px;
+  color: #555;
+  margin-top: 2px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 6px;
+  color: #2e7d32;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}

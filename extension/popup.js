@@ -121,6 +121,15 @@ function pinAndRerun(index, candidate) {
   });
 }
 
+function unpinItem(itemName) {
+  chrome.storage.local.get(PINNED_KEY, (result) => {
+    const pinned = result[PINNED_KEY] || {};
+    delete pinned[GroceryMatcher.normalizeKey(itemName)];
+    chrome.storage.local.set({ [PINNED_KEY]: pinned });
+    // storage.onChanged re-renders the queue with the pin removed.
+  });
+}
+
 function renderCandidatePicker(item, index, candidates) {
   const picker = document.createElement('ul');
   picker.className = 'candidate-list';
@@ -192,6 +201,22 @@ function renderCartQueue(queue, pinned) {
     info.appendChild(nameEl);
     info.appendChild(qtyEl);
 
+    const pin = pinned[GroceryMatcher.normalizeKey(item.name)];
+    if (pin) {
+      const pinEl = document.createElement('span');
+      pinEl.className = 'pin-indicator';
+      pinEl.textContent = `\u{1F4CC} ${pin.title || pin.asin}`;
+
+      const unpinBtn = document.createElement('button');
+      unpinBtn.type = 'button';
+      unpinBtn.className = 'btn-link';
+      unpinBtn.textContent = 'Unpin';
+      unpinBtn.addEventListener('click', () => unpinItem(item.name));
+      pinEl.appendChild(unpinBtn);
+
+      info.appendChild(pinEl);
+    }
+
     const actions = document.createElement('div');
     actions.className = 'item-actions';
 
@@ -223,6 +248,31 @@ function renderCartQueue(queue, pinned) {
 
     if (status === 'ambiguous' && result && Array.isArray(result.candidates) && result.candidates.length > 0) {
       li.appendChild(renderCandidatePicker(item, index, result.candidates));
+    }
+
+    if (status === 'added' && result && Array.isArray(result.candidates) && result.candidates.length > 0) {
+      const wrongBtn = document.createElement('button');
+      wrongBtn.type = 'button';
+      wrongBtn.className = 'btn-link';
+      wrongBtn.textContent = 'Wrong item?';
+      actions.appendChild(wrongBtn);
+
+      const picker = renderCandidatePicker(item, index, result.candidates);
+      picker.hidden = true;
+
+      const note = document.createElement('p');
+      note.className = 'hint';
+      note.textContent =
+        'Picking a product pins it and re-adds this item. Remove the wrong product from your cart manually.';
+      note.hidden = true;
+
+      wrongBtn.addEventListener('click', () => {
+        picker.hidden = !picker.hidden;
+        note.hidden = picker.hidden;
+      });
+
+      li.appendChild(note);
+      li.appendChild(picker);
     }
 
     cartQueueListEl.appendChild(li);
