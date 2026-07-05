@@ -61,6 +61,27 @@ per-item status, with a **Retry** action and an **Open manually** escape
 hatch (falls back to the assisted-mode search URL) for anything marked
 `ambiguous` or `not_found`.
 
+## Learning: it gets better every run
+
+Automated mode now learns your product choices:
+
+- **First encounter:** the extension scores search results against your item
+  name. A single clear match is added automatically; anything uncertain is
+  marked *Ambiguous* with the top candidates captured.
+- **Teach it once:** in the popup, ambiguous items show those candidates —
+  click the product you want. That choice is **pinned** (stored in
+  `chrome.storage.local` under `pinnedProducts`) and the item is re-added
+  immediately via its product page.
+- **Every run after:** pinned items skip search entirely and are added from
+  their product page (`amazon.com/dp/<ASIN>`), the most stable automation
+  path. Only new list items ever hit the search heuristic.
+- **Corrections:** auto-added items show a *Wrong item?* link to re-pick and
+  pin (remove the wrong product from your cart manually). Pinned rows show a
+  📌 with an *Unpin* control if a product goes stale.
+
+Pins live only in this browser profile and are lost if the extension is
+removed.
+
 ## Risks
 
 - **No official API.** This is UI automation against amazon.com's live,
