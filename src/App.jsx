@@ -3,15 +3,11 @@ import { Container, Box, Typography, Paper, Tabs, Tab } from '@mui/material';
 import MealForm from './components/MealForm';
 import MealList from './components/MealList';
 import MealPlan from './components/MealPlan';
-import Passcode from './components/Passcode';
 import Staples from './components/Staples';
 import GroceryList from './components/GroceryList';
 import { getAllMeals } from './services/firebaseService';
 
 const App = () => {
-  const [unlocked, setUnlocked] = useState(
-    sessionStorage.getItem('unlocked') === 'true'
-  );
   const [meals, setMeals] = useState([]);
   const [weekMeals, setWeekMeals] = useState([]);
   const [view, setView] = useState('week');
@@ -22,17 +18,8 @@ const App = () => {
   };
 
   useEffect(() => {
-    if (unlocked) fetchMeals();
-  }, [unlocked]);
-
-  const handleUnlock = () => {
-    sessionStorage.setItem('unlocked', 'true');
-    setUnlocked(true);
-  };
-
-  if (!unlocked) {
-    return <Passcode onUnlock={handleUnlock} />;
-  }
+    fetchMeals();
+  }, []);
 
   return (
     <Container maxWidth="md" style={{ marginTop: '2rem' }}>
