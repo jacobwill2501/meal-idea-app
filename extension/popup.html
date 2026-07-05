@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Grocery List to Whole Foods Cart</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="header">
+        <h1>Grocery to Whole Foods</h1>
+        <p id="export-meta" class="export-meta">No export data yet.</p>
+      </header>
+
+      <section id="empty-state" class="empty-state" hidden>
+        <p>
+          No grocery export found. Open your grocery list in the app tab and
+          make sure at least one item is in it.
+        </p>
+      </section>
+
+      <section id="assisted-mode" class="section" hidden>
+        <div class="section-header">
+          <h2>Open in Whole Foods</h2>
+          <button id="open-all-btn" class="btn btn-secondary" type="button">
+            Open all
+          </button>
+        </div>
+        <p class="hint">
+          Opens a Whole Foods-scoped Amazon search for each item in a new tab.
+          Add each item to your cart yourself on the page that opens.
+        </p>
+        <ul id="item-list" class="item-list"></ul>
+      </section>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
