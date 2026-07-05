@@ -16,6 +16,7 @@ const itemListEl = document.getElementById('item-list');
 const automatedModeEl = document.getElementById('automated-mode');
 const sendToCartBtn = document.getElementById('send-to-cart-btn');
 const cartQueueListEl = document.getElementById('cart-queue-list');
+const clearDataBtn = document.getElementById('clear-data-btn');
 
 let latestExportData = null;
 
@@ -374,6 +375,10 @@ openAllBtn.addEventListener('click', () => {
 });
 
 sendToCartBtn.addEventListener('click', startCartQueue);
+
+clearDataBtn.addEventListener('click', () => {
+  chrome.storage.local.remove([EXPORT_KEY, CART_QUEUE_KEY]);
+});
 
 // Keep the popup in sync if the export or cart queue changes while the
 // popup is open (e.g. amazon-cart.js reports progress on a step).
