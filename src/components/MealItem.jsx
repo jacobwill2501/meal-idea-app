@@ -4,7 +4,6 @@ import {
 	ListItemText,
 	IconButton,
 	Collapse,
-	TextField,
 	Button,
 	Stack,
 	Box,
@@ -14,6 +13,12 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { updateMeal } from '../services/firebaseService';
+import IngredientRowsEditor from './IngredientRowsEditor';
+import { formatIngredientRows } from '../utils/formatIngredientRows';
+
+function cleanRows(rows) {
+	return rows.filter((row) => row.name && row.name.trim());
+}
 
 const MealItem = ({
 	meal,
@@ -22,30 +27,34 @@ const MealItem = ({
 	setExpandedMealId,
 	handleDeleteMeal,
 }) => {
-	const [editingMeal, setEditingMeal] = useState(false);
 	const [editFields, setEditFields] = useState({
-		protein: meal.protein || '',
-		vegetable: meal.vegetable || '',
-		carb: meal.carb || '',
-		extras: meal.extras || '',
+		protein: meal.protein || [],
+		vegetable: meal.vegetable || [],
+		carb: meal.carb || [],
+		extras: meal.extras || [],
 	});
 
 	useEffect(() => {
 		if (expandedMealId === meal.id) {
 			setEditFields({
-				protein: meal.protein || '',
-				vegetable: meal.vegetable || '',
-				carb: meal.carb || '',
-				extras: meal.extras || '',
+				protein: meal.protein || [],
+				vegetable: meal.vegetable || [],
+				carb: meal.carb || [],
+				extras: meal.extras || [],
 			});
 		}
 	}, [expandedMealId, meal]);
 
 	const handleSaveMeal = async () => {
-		const updatedMeal = { ...meal, ...editFields };
+		const updatedMeal = {
+			...meal,
+			protein: cleanRows(editFields.protein),
+			vegetable: cleanRows(editFields.vegetable),
+			carb: cleanRows(editFields.carb),
+			extras: cleanRows(editFields.extras),
+		};
 		await updateMeal(meal.id, updatedMeal);
 		setMeals((prev) => prev.map((m) => (m.id === meal.id ? updatedMeal : m)));
-		setEditingMeal(false);
 		setExpandedMealId(null);
 	};
 
@@ -55,7 +64,7 @@ const MealItem = ({
 				<Box sx={{ flexGrow: 1 }}>
 					<ListItemText
 						primary={meal.name}
-						secondary={`Protein: ${meal.protein} | Vegetable: ${meal.vegetable} | Carb: ${meal.carb} | Extras: ${meal.extras}`}
+						secondary={`Protein: ${formatIngredientRows(meal.protein)} | Vegetable: ${formatIngredientRows(meal.vegetable)} | Carb: ${formatIngredientRows(meal.carb)} | Extras: ${formatIngredientRows(meal.extras)}`}
 					/>
 					<Collapse
 						in={expandedMealId === meal.id}
@@ -65,37 +74,25 @@ const MealItem = ({
 						<List component="div" disablePadding sx={{ pl: 2 }}>
 							<MuiListItem>
 								<Stack spacing={2} width="100%">
-									<TextField
-										label="Edit Protein"
-										fullWidth
-										value={editFields.protein}
-										onChange={(e) =>
-											setEditFields({ ...editFields, protein: e.target.value })
-										}
+									<IngredientRowsEditor
+										label="Protein Option"
+										rows={editFields.protein}
+										onChange={(rows) => setEditFields({ ...editFields, protein: rows })}
 									/>
-									<TextField
-										label="Edit Vegetable/Fiber"
-										fullWidth
-										value={editFields.vegetable}
-										onChange={(e) =>
-											setEditFields({ ...editFields, vegetable: e.target.value })
-										}
+									<IngredientRowsEditor
+										label="Vegetable/Fiber Option"
+										rows={editFields.vegetable}
+										onChange={(rows) => setEditFields({ ...editFields, vegetable: rows })}
 									/>
-									<TextField
-										label="Edit Carb"
-										fullWidth
-										value={editFields.carb}
-										onChange={(e) =>
-											setEditFields({ ...editFields, carb: e.target.value })
-										}
+									<IngredientRowsEditor
+										label="Carb Option"
+										rows={editFields.carb}
+										onChange={(rows) => setEditFields({ ...editFields, carb: rows })}
 									/>
-									<TextField
-										label="Edit Extras"
-										fullWidth
-										value={editFields.extras}
-										onChange={(e) =>
-											setEditFields({ ...editFields, extras: e.target.value })
-										}
+									<IngredientRowsEditor
+										label="Extras"
+										rows={editFields.extras}
+										onChange={(rows) => setEditFields({ ...editFields, extras: rows })}
 									/>
 									<Stack direction="row" spacing={2}>
 										<Button
