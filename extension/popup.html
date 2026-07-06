@@ -12,10 +12,21 @@
         <p id="export-meta" class="export-meta">No export data yet.</p>
       </header>
 
+      <section id="upload-section" class="section" hidden>
+        <button id="upload-btn" class="btn btn-primary" type="button" disabled>
+          Upload grocery list
+        </button>
+        <p id="upload-error" class="hint" hidden></p>
+        <p class="hint">
+          Enabled while the app's Grocery List tab is open. Nothing is read
+          automatically — click to (re)upload the current list.
+        </p>
+      </section>
+
       <section id="empty-state" class="empty-state" hidden>
         <p>
-          No grocery export found. Open your grocery list in the app tab and
-          make sure at least one item is in it.
+          No grocery list uploaded yet. Open the Grocery List tab in the
+          meal-idea-app, then click "Upload grocery list" above.
         </p>
       </section>
 
@@ -72,6 +83,7 @@
     </div>
     <script src="lib/matcher.js"></script>
     <script src="lib/urls.js"></script>
+    <script src="lib/export-reader.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

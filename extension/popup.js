@@ -18,6 +18,9 @@ const cartQueueListEl = document.getElementById('cart-queue-list');
 const queueToggleBtn = document.getElementById('queue-toggle-btn');
 const queueStatusEl = document.getElementById('queue-status');
 const clearDataBtn = document.getElementById('clear-data-btn');
+const uploadSectionEl = document.getElementById('upload-section');
+const uploadBtn = document.getElementById('upload-btn');
+const uploadErrorEl = document.getElementById('upload-error');
 
 let latestExportData = null;
 
@@ -29,6 +32,73 @@ function sendCommand(message, callback) {
       console.warn('[wf-cart:popup] command failed:', message.type, chrome.runtime.lastError);
     }
     if (callback) callback(response);
+  });
+}
+
+const APP_URL_PREFIXES = [
+  'https://jacobwill2501.github.io/meal-idea-app',
+  'http://localhost:3000',
+];
+
+function getActiveAppTab(callback) {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs && tabs[0];
+    const onApp = Boolean(
+      tab && tab.url && APP_URL_PREFIXES.some((prefix) => tab.url.startsWith(prefix))
+    );
+    callback(onApp ? tab : null);
+  });
+}
+
+// Runs readGroceryExport (from lib/export-reader.js) inside the app page.
+// The function is serialized by executeScript, so it must stay closure-free.
+function runReaderInTab(tabId, callback) {
+  chrome.scripting.executeScript(
+    { target: { tabId }, func: readGroceryExport },
+    (results) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[wf-cart:popup] executeScript failed:', chrome.runtime.lastError);
+        callback(null);
+        return;
+      }
+      callback(results && results[0] ? results[0].result : null);
+    }
+  );
+}
+
+// Section is visible only on app pages; the button is enabled only while
+// the app's Grocery List tab is active (= the export element exists).
+function probeUploadAvailability() {
+  getActiveAppTab((tab) => {
+    if (!tab) {
+      uploadSectionEl.hidden = true;
+      return;
+    }
+    uploadSectionEl.hidden = false;
+    uploadBtn.disabled = true;
+    runReaderInTab(tab.id, (result) => {
+      uploadBtn.disabled = !(result && result.ok);
+    });
+  });
+}
+
+function uploadGroceryList() {
+  uploadErrorEl.hidden = true;
+  getActiveAppTab((tab) => {
+    if (!tab) {
+      uploadSectionEl.hidden = true;
+      return;
+    }
+    runReaderInTab(tab.id, (result) => {
+      if (!result || !result.ok) {
+        uploadErrorEl.textContent =
+          "Couldn't read the grocery list — make sure the Grocery List tab is open, then try again.";
+        uploadErrorEl.hidden = false;
+        return;
+      }
+      chrome.storage.local.set({ [EXPORT_KEY]: result.data });
+      // storage.onChanged re-renders the export list from the new copy.
+    });
   });
 }
 
@@ -373,6 +443,7 @@ openAllBtn.addEventListener('click', () => {
 
 sendToCartBtn.addEventListener('click', startCartQueue);
 queueToggleBtn.addEventListener('click', toggleQueuePause);
+uploadBtn.addEventListener('click', uploadGroceryList);
 
 clearDataBtn.addEventListener('click', () => {
   chrome.storage.local.remove([EXPORT_KEY, CART_QUEUE_KEY]);
@@ -394,3 +465,4 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 loadExportData();
 loadCartQueue();
+probeUploadAvailability();
