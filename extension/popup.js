@@ -104,6 +104,8 @@ function statusLabel(status) {
       return 'In progress';
     case 'paused':
       return 'Paused';
+    case 'skipped':
+      return 'Skipped';
     default:
       return 'Pending';
   }
@@ -271,6 +273,15 @@ function renderCartQueue(queue, pinned) {
       actions.appendChild(manualBtn);
     }
 
+    if (status === 'in_progress' || status === 'paused') {
+      const skipBtn = document.createElement('button');
+      skipBtn.type = 'button';
+      skipBtn.className = 'btn btn-secondary btn-small';
+      skipBtn.textContent = 'Skip';
+      skipBtn.addEventListener('click', () => skipItem(index));
+      actions.appendChild(skipBtn);
+    }
+
     li.appendChild(info);
     li.appendChild(actions);
 
@@ -362,6 +373,36 @@ function toggleQueuePause() {
         // paused), so re-navigate it to the current item to kick
         // processing off again.
         navigateTabToItem(queue.tabId, queue.items[queue.currentIndex]);
+      }
+    });
+  });
+}
+
+function firstUnresolvedIndex(items, results, fromIndex) {
+  let idx = fromIndex;
+  while (idx < items.length && results[idx]) {
+    idx += 1;
+  }
+  return idx;
+}
+
+function skipItem(index) {
+  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
+    const queue = result[CART_QUEUE_KEY];
+    if (!queue || !Array.isArray(queue.items) || !queue.items[index]) {
+      return;
+    }
+
+    const item = queue.items[index];
+    const results = Array.isArray(queue.results) ? queue.results.slice() : [];
+    results[index] = { name: item.name, quantity: item.quantity, status: 'skipped' };
+
+    const nextIndex = firstUnresolvedIndex(queue.items, results, index + 1);
+    const updatedQueue = { ...queue, results, currentIndex: nextIndex };
+
+    chrome.storage.local.set({ [CART_QUEUE_KEY]: updatedQueue }, () => {
+      if (!queue.paused && nextIndex < queue.items.length && queue.tabId != null) {
+        navigateTabToItem(queue.tabId, queue.items[nextIndex]);
       }
     });
   });

@@ -281,3 +281,8 @@ body {
   background: #f0f0f0;
   color: #666;
 }
+
+.status-skipped {
+  background: #f3f0ff;
+  color: #5b3fa8;
+}
