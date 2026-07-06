@@ -1,5 +1,6 @@
-// Popup UI: reads the groceryExport mirrored by app-reader.js out of
-// chrome.storage.local and offers "assisted mode" — opening a
+// Popup UI: renders the groceryExport copy in chrome.storage.local (written
+// only by the Upload grocery list button below — nothing is read from the
+// app automatically) and offers "assisted mode" — opening a
 // Whole-Foods-scoped Amazon search tab per item so the user can add each
 // one to their cart manually. This is the reliable, scrape-free mode.
 
