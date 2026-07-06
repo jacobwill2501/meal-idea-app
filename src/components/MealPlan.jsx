@@ -13,6 +13,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import { addMealItems } from '../services/groceryService';
+import { formatIngredientRows } from '../utils/formatIngredientRows';
 
 const MealPlan = ({ meals, weekMeals, setWeekMeals }) => {
   const [numOfMeals, setNumOfMeals] = React.useState(5);
@@ -67,7 +68,7 @@ const MealPlan = ({ meals, weekMeals, setWeekMeals }) => {
           <ListItem key={meal.id} divider>
             <ListItemText
               primary={meal.name}
-              secondary={`Protein: ${meal.protein} | Vegetable: ${meal.vegetable} | Carb: ${meal.carb} | Extras: ${meal.extras}`}
+              secondary={`Protein: ${formatIngredientRows(meal.protein)} | Vegetable: ${formatIngredientRows(meal.vegetable)} | Carb: ${formatIngredientRows(meal.carb)} | Extras: ${formatIngredientRows(meal.extras)}`}
             />
             <Button
               variant="contained"
