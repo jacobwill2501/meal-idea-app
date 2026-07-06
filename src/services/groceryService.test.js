@@ -109,6 +109,12 @@ describe('addMealItems', () => {
     expect(Object.keys(list).length).toBe(1);
   });
 
+  it('treats a legacy string-format category as empty instead of crashing', async () => {
+    const meals = [{ name: 'Tacos', protein: [{ name: 'Chicken', qty: 1 }], vegetable: 'Peppers, Onions', carb: [], extras: [] }];
+    const list = await addMealItems(meals);
+    expect(Object.keys(list)).toEqual(['chicken']);
+  });
+
   it('carries a row quantity into a new grocery item', async () => {
     const meals = [{ name: 'Tacos', protein: [{ name: 'Chicken', qty: 3 }], vegetable: [], carb: [], extras: [] }];
     const list = await addMealItems(meals);

@@ -30,7 +30,7 @@ export async function addMealItems(weekMeals) {
 
   weekMeals.forEach((meal) => {
     [meal.protein, meal.vegetable, meal.carb, meal.extras].forEach((rows) => {
-      (rows || []).forEach(({ name, qty }) => {
+      (Array.isArray(rows) ? rows : []).forEach(({ name, qty }) => {
         if (!name || !name.trim()) return;
         const key = normalizeKey(name);
         const safeQty = Math.max(1, qty || 1);

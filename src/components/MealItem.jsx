@@ -28,19 +28,19 @@ const MealItem = ({
 	handleDeleteMeal,
 }) => {
 	const [editFields, setEditFields] = useState({
-		protein: meal.protein || [],
-		vegetable: meal.vegetable || [],
-		carb: meal.carb || [],
-		extras: meal.extras || [],
+		protein: Array.isArray(meal.protein) ? meal.protein : [],
+		vegetable: Array.isArray(meal.vegetable) ? meal.vegetable : [],
+		carb: Array.isArray(meal.carb) ? meal.carb : [],
+		extras: Array.isArray(meal.extras) ? meal.extras : [],
 	});
 
 	useEffect(() => {
 		if (expandedMealId === meal.id) {
 			setEditFields({
-				protein: meal.protein || [],
-				vegetable: meal.vegetable || [],
-				carb: meal.carb || [],
-				extras: meal.extras || [],
+				protein: Array.isArray(meal.protein) ? meal.protein : [],
+				vegetable: Array.isArray(meal.vegetable) ? meal.vegetable : [],
+				carb: Array.isArray(meal.carb) ? meal.carb : [],
+				extras: Array.isArray(meal.extras) ? meal.extras : [],
 			});
 		}
 	}, [expandedMealId, meal]);
