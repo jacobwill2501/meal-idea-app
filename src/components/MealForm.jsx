@@ -2,68 +2,67 @@ import React, { useState } from 'react';
 import { TextField, Button, Stack, Box } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { addMeal } from '../services/firebaseService';
+import IngredientRowsEditor from './IngredientRowsEditor';
+
+const EMPTY_MEAL = {
+	name: '',
+	protein: [],
+	vegetable: [],
+	carb: [],
+	extras: [],
+};
+
+function cleanRows(rows) {
+	return rows.filter((row) => row.name && row.name.trim());
+}
 
 const MealForm = ({ fetchMeals }) => {
-	const [newMeal, setNewMeal] = useState({
-		name: '',
-		protein: '',
-		vegetable: '',
-		carb: '',
-		extras: '',
-	});
+	const [newMeal, setNewMeal] = useState(EMPTY_MEAL);
 
 	const handleAddMeal = async () => {
 		if (!newMeal.name.trim()) return;
 
 		await addMeal({
 			...newMeal,
-			protein: newMeal.protein.trim(),
-			vegetable: newMeal.vegetable.trim(),
-			carb: newMeal.carb.trim(),
-			extras: newMeal.extras.trim(),
+			protein: cleanRows(newMeal.protein),
+			vegetable: cleanRows(newMeal.vegetable),
+			carb: cleanRows(newMeal.carb),
+			extras: cleanRows(newMeal.extras),
 		});
 
-		setNewMeal({ name: '', protein: '', vegetable: '', carb: '', extras: '' });
+		setNewMeal(EMPTY_MEAL);
 		await fetchMeals();
 	};
 
 	return (
 		<Stack spacing={2} mb={2}>
-			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-				<TextField
-					label="Meal Name*"
-					variant="outlined"
-					fullWidth
-					value={newMeal.name}
-					onChange={(e) => setNewMeal({ ...newMeal, name: e.target.value })}
-				/>
-				<TextField
-					label="Protein Option"
-					fullWidth
-					value={newMeal.protein}
-					onChange={(e) => setNewMeal({ ...newMeal, protein: e.target.value })}
-				/>
-			</Stack>
-			<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-				<TextField
-					label="Vegetable/Fiber Option"
-					fullWidth
-					value={newMeal.vegetable}
-					onChange={(e) => setNewMeal({ ...newMeal, vegetable: e.target.value })}
-				/>
-				<TextField
-					label="Carb Option"
-					fullWidth
-					value={newMeal.carb}
-					onChange={(e) => setNewMeal({ ...newMeal, carb: e.target.value })}
-				/>
-				<TextField
-					label="Extras"
-					fullWidth
-					value={newMeal.extras}
-					onChange={(e) => setNewMeal({ ...newMeal, extras: e.target.value })}
-				/>
-			</Stack>
+			<TextField
+				label="Meal Name*"
+				variant="outlined"
+				fullWidth
+				value={newMeal.name}
+				onChange={(e) => setNewMeal({ ...newMeal, name: e.target.value })}
+			/>
+			<IngredientRowsEditor
+				label="Protein Option"
+				rows={newMeal.protein}
+				onChange={(rows) => setNewMeal({ ...newMeal, protein: rows })}
+			/>
+			<IngredientRowsEditor
+				label="Vegetable/Fiber Option"
+				rows={newMeal.vegetable}
+				onChange={(rows) => setNewMeal({ ...newMeal, vegetable: rows })}
+			/>
+			<IngredientRowsEditor
+				label="Carb Option"
+				rows={newMeal.carb}
+				onChange={(rows) => setNewMeal({ ...newMeal, carb: rows })}
+			/>
+			<IngredientRowsEditor
+				label="Extras"
+				rows={newMeal.extras}
+				onChange={(rows) => setNewMeal({ ...newMeal, extras: rows })}
+			/>
 			<Box textAlign="right">
 				<Button
 					variant="contained"
