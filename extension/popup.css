@@ -259,3 +259,15 @@ body {
 .btn-muted:hover {
   color: #555;
 }
+
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.queue-status {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: #666;
+}

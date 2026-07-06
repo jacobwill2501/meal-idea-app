@@ -36,10 +36,21 @@
       <section id="automated-mode" class="section" hidden>
         <div class="section-header">
           <h2>Send to Cart (Experimental)</h2>
-          <button id="send-to-cart-btn" class="btn btn-primary" type="button">
-            Send to Whole Foods Cart
-          </button>
+          <div class="section-header-actions">
+            <button id="send-to-cart-btn" class="btn btn-primary" type="button">
+              Send to Whole Foods Cart
+            </button>
+            <button
+              id="queue-toggle-btn"
+              class="btn btn-secondary"
+              type="button"
+              hidden
+            >
+              Pause
+            </button>
+          </div>
         </div>
+        <p id="queue-status" class="queue-status" hidden></p>
         <p class="hint">
           Best-effort automation against amazon.com's live page. It can fail
           or misfire if Amazon changes their page. Use "Open in Whole Foods"

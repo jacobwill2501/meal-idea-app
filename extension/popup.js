@@ -16,6 +16,8 @@ const itemListEl = document.getElementById('item-list');
 const automatedModeEl = document.getElementById('automated-mode');
 const sendToCartBtn = document.getElementById('send-to-cart-btn');
 const cartQueueListEl = document.getElementById('cart-queue-list');
+const queueToggleBtn = document.getElementById('queue-toggle-btn');
+const queueStatusEl = document.getElementById('queue-status');
 const clearDataBtn = document.getElementById('clear-data-btn');
 
 let latestExportData = null;
@@ -169,8 +171,24 @@ function renderCandidatePicker(item, index, candidates) {
   return picker;
 }
 
+function renderQueueStatus(queue) {
+  const active = queue && Array.isArray(queue.items) && queue.currentIndex < queue.items.length;
+
+  if (!active) {
+    queueStatusEl.hidden = true;
+    queueToggleBtn.hidden = true;
+    return;
+  }
+
+  queueStatusEl.hidden = false;
+  queueStatusEl.textContent = queue.paused ? 'Paused' : 'Running';
+  queueToggleBtn.hidden = false;
+  queueToggleBtn.textContent = queue.paused ? 'Resume' : 'Pause';
+}
+
 function renderCartQueue(queue, pinned) {
   cartQueueListEl.innerHTML = '';
+  renderQueueStatus(queue);
 
   if (!queue || !Array.isArray(queue.items)) {
     sendToCartBtn.disabled = false;
@@ -319,6 +337,27 @@ function startCartQueue() {
   });
 }
 
+function toggleQueuePause() {
+  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
+    const queue = result[CART_QUEUE_KEY];
+    if (!queue || !Array.isArray(queue.items) || queue.currentIndex >= queue.items.length) {
+      return;
+    }
+
+    const paused = !queue.paused;
+    const updatedQueue = { ...queue, paused };
+
+    chrome.storage.local.set({ [CART_QUEUE_KEY]: updatedQueue }, () => {
+      if (!paused && queue.tabId != null) {
+        // Resuming: the tab may be idle on a stale page (it no-oped while
+        // paused), so re-navigate it to the current item to kick
+        // processing off again.
+        navigateTabToItem(queue.tabId, queue.items[queue.currentIndex]);
+      }
+    });
+  });
+}
+
 function retryItem(index) {
   chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
     const queue = result[CART_QUEUE_KEY];
@@ -379,6 +418,7 @@ openAllBtn.addEventListener('click', () => {
 });
 
 sendToCartBtn.addEventListener('click', startCartQueue);
+queueToggleBtn.addEventListener('click', toggleQueuePause);
 
 clearDataBtn.addEventListener('click', () => {
   chrome.storage.local.remove([EXPORT_KEY, CART_QUEUE_KEY]);
