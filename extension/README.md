@@ -82,6 +82,41 @@ Automated mode now learns your product choices:
 Pins live only in this browser profile and are lost if the extension is
 removed.
 
+## Cart queue architecture (v0.2.0)
+
+All `cartQueue` state is owned by the background service worker
+(`background.js`). Content scripts and the popup never write it directly:
+
+- Content script → worker: `cs:pageReady` (what page am I on, what should I
+  do), `cs:requestClick` (permission to click — granted at most once per
+  item, ever), `cs:reportResult`.
+- Popup → worker: `popup:start`, `popup:toggle`, `popup:skip`, `popup:retry`.
+- Every mutation runs under a lock in the worker, so interleaved
+  read-modify-write cycles (the cause of the 2026-07 re-add loops and the
+  Pause button not sticking) cannot clobber each other.
+- Pause **parks the queue tab** on the WFM storefront — navigation is what
+  reliably stops a runaway page (it's why Skip worked when Pause didn't).
+- Diagnostic logging: filter the tab console for `[wf-cart:cs]` and the
+  service-worker console for `[wf-cart:bg]`. If a runaway add ever recurs,
+  those lines show exactly which click was granted and why.
+
+## Live verification checklist (still open)
+
+Run one small queue against a live, logged-in amazon.com session and check:
+
+1. **WFM cart routing:** with `almBrandId=VUZHIFdob2xlIEZvb2Rz` on search
+   (`&i=wholefoods`) and product (`&fpw=alm`) URLs, do added items land in
+   the *Whole Foods* cart (not the main Amazon cart)? If not, capture the
+   URL of a search you reach by hand from the WFM storefront and update
+   `lib/urls.js` to match it.
+2. **Selectors:** do `[data-component-type="s-search-result"]`,
+   `button[name="submit.addToCart"]`, `#add-to-cart-button`, and
+   `#quantity` still match? Iterate in `content-scripts/amazon-cart.js`.
+3. **Runaway watch:** after one item auto-adds, watch the cart count for
+   ~30s. If it keeps climbing with no `[wf-cart:cs] clicking` log lines,
+   the page itself is looping (quantity-stepper feedback) — the fix then
+   belongs in `setQuantity`, and Pause will still stop it by parking.
+
 ## Risks
 
 - **No official API.** This is UI automation against amazon.com's live,

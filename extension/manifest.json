@@ -2,13 +2,16 @@
   "manifest_version": 3,
   "name": "Grocery List to Whole Foods Cart",
   "description": "Push your meal-idea-app grocery list into a Whole Foods cart on amazon.com.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://jacobwill2501.github.io/meal-idea-app/*",
     "http://localhost:3000/*",
     "https://www.amazon.com/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

@@ -6,7 +6,6 @@
 const EXPORT_KEY = 'groceryExport';
 const CART_QUEUE_KEY = 'cartQueue';
 const PINNED_KEY = 'pinnedProducts';
-const AMAZON_MATCH_PATTERN = 'https://www.amazon.com/*';
 
 const exportMetaEl = document.getElementById('export-meta');
 const emptyStateEl = document.getElementById('empty-state');
@@ -22,9 +21,15 @@ const clearDataBtn = document.getElementById('clear-data-btn');
 
 let latestExportData = null;
 
-function wholeFoodsSearchUrl(itemName) {
-  const query = encodeURIComponent(itemName);
-  return `https://www.amazon.com/s?k=${query}&i=wholefoods`;
+const { wholeFoodsSearchUrl } = GroceryUrls;
+
+function sendCommand(message, callback) {
+  chrome.runtime.sendMessage(message, (response) => {
+    if (chrome.runtime.lastError) {
+      console.warn('[wf-cart:popup] command failed:', message.type, chrome.runtime.lastError);
+    }
+    if (callback) callback(response);
+  });
 }
 
 function formatTimestamp(isoString) {
@@ -318,129 +323,28 @@ function renderCartQueue(queue, pinned) {
   });
 }
 
-function getOrCreateAmazonTab(callback) {
-  chrome.tabs.query({ url: AMAZON_MATCH_PATTERN }, (tabs) => {
-    if (tabs && tabs.length > 0) {
-      callback(tabs[0]);
-      return;
-    }
-    chrome.tabs.create({ url: 'https://www.amazon.com/', active: false }, (tab) => {
-      callback(tab);
-    });
-  });
-}
-
-function navigateTabToItem(tabId, item) {
-  chrome.tabs.update(tabId, { url: wholeFoodsSearchUrl(item.name) });
-}
-
+// All queue mutations go through the background service worker (the single
+// writer). The popup only renders from storage and sends commands.
 function startCartQueue() {
   if (!latestExportData || !Array.isArray(latestExportData.items) || latestExportData.items.length === 0) {
     return;
   }
-
   sendToCartBtn.disabled = true;
-
-  const items = latestExportData.items;
-
-  getOrCreateAmazonTab((tab) => {
-    const queue = {
-      items,
-      results: [],
-      currentIndex: 0,
-      tabId: tab.id,
-    };
-
-    chrome.storage.local.set({ [CART_QUEUE_KEY]: queue }, () => {
-      navigateTabToItem(tab.id, items[0]);
-    });
+  sendCommand({ type: 'popup:start', items: latestExportData.items }, () => {
+    sendToCartBtn.disabled = false;
   });
 }
 
 function toggleQueuePause() {
-  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
-    const queue = result[CART_QUEUE_KEY];
-    if (!queue || !Array.isArray(queue.items) || queue.currentIndex >= queue.items.length) {
-      return;
-    }
-
-    const paused = !queue.paused;
-    const updatedQueue = { ...queue, paused };
-
-    chrome.storage.local.set({ [CART_QUEUE_KEY]: updatedQueue }, () => {
-      if (!paused && queue.tabId != null) {
-        // Resuming: the tab may be idle on a stale page (it no-oped while
-        // paused), so re-navigate it to the current item to kick
-        // processing off again.
-        navigateTabToItem(queue.tabId, queue.items[queue.currentIndex]);
-      }
-    });
-  });
-}
-
-function firstUnresolvedIndex(items, results, fromIndex) {
-  let idx = fromIndex;
-  while (idx < items.length && results[idx]) {
-    idx += 1;
-  }
-  return idx;
+  sendCommand({ type: 'popup:toggle' });
 }
 
 function skipItem(index) {
-  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
-    const queue = result[CART_QUEUE_KEY];
-    if (!queue || !Array.isArray(queue.items) || !queue.items[index]) {
-      return;
-    }
-
-    const item = queue.items[index];
-    const results = Array.isArray(queue.results) ? queue.results.slice() : [];
-    results[index] = { name: item.name, quantity: item.quantity, status: 'skipped' };
-
-    const nextIndex = firstUnresolvedIndex(queue.items, results, index + 1);
-    const updatedQueue = { ...queue, results, currentIndex: nextIndex };
-
-    chrome.storage.local.set({ [CART_QUEUE_KEY]: updatedQueue }, () => {
-      if (!queue.paused && nextIndex < queue.items.length && queue.tabId != null) {
-        navigateTabToItem(queue.tabId, queue.items[nextIndex]);
-      }
-    });
-  });
+  sendCommand({ type: 'popup:skip', index });
 }
 
 function retryItem(index) {
-  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
-    const queue = result[CART_QUEUE_KEY];
-    if (!queue || !Array.isArray(queue.items) || !queue.items[index]) {
-      return;
-    }
-
-    const results = Array.isArray(queue.results) ? queue.results.slice() : [];
-    results[index] = undefined;
-
-    const attempted = queue.attempted ? { ...queue.attempted } : {};
-    delete attempted[index];
-
-    const updatedQueue = {
-      ...queue,
-      results,
-      attempted,
-      currentIndex: index,
-    };
-
-    chrome.storage.local.set({ [CART_QUEUE_KEY]: updatedQueue }, () => {
-      if (queue.tabId != null) {
-        navigateTabToItem(queue.tabId, queue.items[index]);
-      } else {
-        getOrCreateAmazonTab((tab) => {
-          chrome.storage.local.set({
-            [CART_QUEUE_KEY]: { ...updatedQueue, tabId: tab.id },
-          });
-          navigateTabToItem(tab.id, queue.items[index]);
-        });
-      }
-    });
-  });
+  sendCommand({ type: 'popup:retry', index });
 }
 
 function loadCartQueue() {
