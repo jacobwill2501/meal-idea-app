@@ -25,12 +25,14 @@ function makeChromeStorage(store) {
           const keyList = Array.isArray(keys) ? keys : [keys];
           const result = {};
           keyList.forEach((key) => {
-            if (store[key] !== undefined) result[key] = store[key];
+            if (store[key] !== undefined) result[key] = JSON.parse(JSON.stringify(store[key]));
           });
           callback(result);
         },
         set(obj, callback) {
-          Object.assign(store, obj);
+          Object.keys(obj).forEach((key) => {
+            store[key] = JSON.parse(JSON.stringify(obj[key]));
+          });
           if (callback) callback();
         },
       },
