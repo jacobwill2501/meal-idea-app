@@ -35,6 +35,16 @@ function saveQueue(queue, callback) {
   });
 }
 
+// Re-reads the queue from storage immediately before building a write, so a
+// concurrent update from elsewhere (e.g. the popup setting `paused: true`)
+// isn't clobbered by a write built from this function's stale `queue`
+// parameter, which was captured back when the page first loaded.
+function withFreshQueue(fallbackQueue, callback) {
+  chrome.storage.local.get([CART_QUEUE_KEY], (result) => {
+    callback(result[CART_QUEUE_KEY] || fallbackQueue);
+  });
+}
+
 // Starting at `fromIndex`, walk forward past any indices that already hold
 // a recorded result (all recorded statuses — added/ambiguous/not_found —
 // are terminal). Retry clears the slot it rewinds to before re-navigating,
@@ -50,25 +60,27 @@ function firstUnresolvedIndex(queue, fromIndex) {
 }
 
 function recordResult(queue, index, status, extra) {
-  const results = Array.isArray(queue.results) ? queue.results.slice() : [];
-  const item = queue.items[index];
-  results[index] = { name: item.name, quantity: item.quantity, status, ...(extra || {}) };
+  withFreshQueue(queue, (current) => {
+    const results = Array.isArray(current.results) ? current.results.slice() : [];
+    const item = current.items[index];
+    results[index] = { name: item.name, quantity: item.quantity, status, ...(extra || {}) };
 
-  // Advance past any subsequent items that already have a recorded result
-  // (left over from before a retry rewound currentIndex) so we don't
-  // re-process — and re-add to the cart — items that already completed.
-  const nextIndex = firstUnresolvedIndex({ items: queue.items, results }, index + 1);
-  const updatedQueue = {
-    ...queue,
-    results,
-    currentIndex: nextIndex,
-  };
+    // Advance past any subsequent items that already have a recorded result
+    // (left over from before a retry rewound currentIndex) so we don't
+    // re-process — and re-add to the cart — items that already completed.
+    const nextIndex = firstUnresolvedIndex({ items: current.items, results }, index + 1);
+    const updatedQueue = {
+      ...current,
+      results,
+      currentIndex: nextIndex,
+    };
 
-  saveQueue(updatedQueue, () => {
-    if (nextIndex < queue.items.length) {
-      window.location.href = wholeFoodsSearchUrl(queue.items[nextIndex].name);
-    }
-    // Otherwise the queue is complete; nothing further to navigate to.
+    saveQueue(updatedQueue, () => {
+      if (nextIndex < current.items.length) {
+        window.location.href = wholeFoodsSearchUrl(current.items[nextIndex].name);
+      }
+      // Otherwise the queue is complete; nothing further to navigate to.
+    });
   });
 }
 
@@ -89,10 +101,12 @@ function alreadyAttempted(queue, index) {
 // again — repeating forever. Saving this marker first means the next load
 // can detect "we already clicked" and stop instead of re-clicking.
 function markAttempted(queue, index, afterSave) {
-  const attempted = queue.attempted ? { ...queue.attempted } : {};
-  attempted[index] = true;
-  const updatedQueue = { ...queue, attempted };
-  saveQueue(updatedQueue, () => afterSave(updatedQueue));
+  withFreshQueue(queue, (current) => {
+    const attempted = current.attempted ? { ...current.attempted } : {};
+    attempted[index] = true;
+    const updatedQueue = { ...current, attempted };
+    saveQueue(updatedQueue, () => afterSave(updatedQueue));
+  });
 }
 
 // Best-effort: find search result containers on the page. Unverified

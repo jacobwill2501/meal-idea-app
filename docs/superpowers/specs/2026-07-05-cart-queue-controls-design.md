@@ -54,10 +54,13 @@ existing logic, and returns immediately if true — no click, no navigation.
 
 Known, accepted limitation: if the user pauses while a page is already in
 its 800ms pre-click wait, that click will still fire once before the pause
-takes effect on the *next* page load. Cancelling in-flight timers via a
-storage-change listener would close this gap but isn't justified by the
-"stop/pause only" (not "abort instantly") requirement confirmed with the
-user.
+takes effect — `recordResult`/`markAttempted` re-read the current queue
+from storage before writing (see `withFreshQueue`), so a `paused: true`
+written concurrently by the popup is preserved rather than clobbered, and
+the *next* page load correctly honors it. Cancelling the in-flight timer
+itself (to skip that one extra click) would require a storage-change
+listener inside the content script and isn't justified by the "stop/pause
+only" (not "abort instantly") requirement confirmed with the user.
 
 ## Popup (`popup.js` / `popup.html` / `popup.css`)
 

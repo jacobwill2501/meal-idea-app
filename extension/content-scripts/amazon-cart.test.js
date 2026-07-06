@@ -118,4 +118,44 @@ describe('amazon-cart reload-loop regression', () => {
     expect(store.cartQueue.attempted).toBeUndefined();
     expect(store.cartQueue.results[0]).toBeUndefined();
   });
+
+  // Regression test for the race the 2026-07-05 final review flagged: the
+  // in-memory `queue` passed into recordResult/markAttempted is a snapshot
+  // taken back in init()'s initial storage read. If the popup's
+  // toggleQueuePause writes `paused: true` to storage while a page's 800ms
+  // pre-click/pre-confirm setTimeout is still pending, the pre-fix code
+  // built its write from that stale snapshot — which never had
+  // `paused: true` — and clobbered the popup's write back to falsy. Fixed
+  // by having recordResult/markAttempted re-read storage (withFreshQueue)
+  // immediately before writing, so a concurrent field survives.
+  test('a pause written concurrently by the popup survives recordResult\'s write', () => {
+    const clickSpy = jest.fn();
+    renderSearchResultsPage(clickSpy);
+
+    require('./amazon-cart.js');
+    // First 800ms timer: search results are "revealed", markAttempted does
+    // its (synchronous, in this fake) get/set round trip with paused still
+    // false, then the click fires and a second 800ms timer is scheduled for
+    // recordResult's confirmation write.
+    jest.advanceTimersByTime(800);
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(store.cartQueue.attempted).toEqual({ 0: true });
+    expect(store.cartQueue.results[0]).toBeUndefined(); // recordResult hasn't run yet
+
+    // Simulate the popup's concurrent write landing in the gap between the
+    // click and recordResult's confirmation write — exactly the window the
+    // bug report described.
+    store.cartQueue.paused = true;
+
+    // Second 800ms timer: recordResult fires and re-reads storage via
+    // withFreshQueue before building its write.
+    jest.advanceTimersByTime(800);
+
+    expect(store.cartQueue.results[0]).toMatchObject({ status: 'added' });
+    // The critical assertion: the popup's concurrent `paused: true` must
+    // survive recordResult's write instead of being clobbered back to
+    // falsy by a write built from the stale in-memory queue.
+    expect(store.cartQueue.paused).toBe(true);
+  });
 });
