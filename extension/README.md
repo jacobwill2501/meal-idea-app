@@ -19,11 +19,16 @@ directly (automated mode).
 
 ## How it works
 
-- `content-scripts/app-reader.js` runs on the app's pages. It reads the
-  hidden `#grocery-export-data` element, parses its JSON, and mirrors it
-  into `chrome.storage.local` under `groceryExport`. A `MutationObserver`
-  keeps this in sync live as you edit your list — no reload needed.
-- `popup.js` reads `groceryExport` from storage and renders it.
+- Nothing runs on the app's pages automatically. The popup shows an
+  **Upload grocery list** button whenever the active tab is the
+  meal-idea-app; it is enabled only while the app's Grocery List tab is
+  active (detected by probing for the `#grocery-export-data` element with
+  `chrome.scripting.executeScript`). Clicking it reads that element's JSON
+  and stores it in `chrome.storage.local` under `groceryExport`. Edit your
+  list in the app, click upload again to refresh the copy.
+- `popup.js` reads `groceryExport` from storage and renders it; the
+  stored copy only changes when you click **Upload grocery list** (or
+  **Clear extension data**).
 - `content-scripts/amazon-cart.js` runs on amazon.com and drives the
   automated cart flow described below.
 
