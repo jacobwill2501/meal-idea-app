@@ -100,6 +100,10 @@ function statusLabel(status) {
       return 'Ambiguous';
     case 'not_found':
       return 'Not found';
+    case 'in_progress':
+      return 'In progress';
+    case 'paused':
+      return 'Paused';
     default:
       return 'Pending';
   }
@@ -201,7 +205,12 @@ function renderCartQueue(queue, pinned) {
 
   queue.items.forEach((item, index) => {
     const result = results[index];
-    const status = result ? result.status : 'pending';
+    const isCurrent = !result && index === queue.currentIndex;
+    const status = result
+      ? result.status
+      : isCurrent
+      ? (queue.paused ? 'paused' : 'in_progress')
+      : 'pending';
 
     const li = document.createElement('li');
     li.className = 'item-row';

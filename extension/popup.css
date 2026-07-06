@@ -271,3 +271,13 @@ body {
   font-size: 11.5px;
   color: #666;
 }
+
+.status-in_progress {
+  background: #e6f0ff;
+  color: #1a56c4;
+}
+
+.status-paused {
+  background: #f0f0f0;
+  color: #666;
+}
