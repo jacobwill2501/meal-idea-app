@@ -329,9 +329,13 @@ function retryItem(index) {
     const results = Array.isArray(queue.results) ? queue.results.slice() : [];
     results[index] = undefined;
 
+    const attempted = queue.attempted ? { ...queue.attempted } : {};
+    delete attempted[index];
+
     const updatedQueue = {
       ...queue,
       results,
+      attempted,
       currentIndex: index,
     };
 

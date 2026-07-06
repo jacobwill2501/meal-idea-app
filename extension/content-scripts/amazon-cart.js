@@ -76,6 +76,25 @@ function markNotFound(queue, index, extra) {
   recordResult(queue, index, 'not_found', extra);
 }
 
+function alreadyAttempted(queue, index) {
+  return Boolean(queue.attempted && queue.attempted[index]);
+}
+
+// Persists an "attempted" marker for `index` BEFORE the caller clicks an
+// add-to-cart control, then invokes `afterSave` with the updated queue.
+// Some real add-to-cart flows navigate the page instead of updating it in
+// place; if that happens, the page (and any pending setTimeout scheduled
+// after the click) is torn down before recordResult ever runs, and the next
+// content-script load would otherwise see an unresolved item and click
+// again — repeating forever. Saving this marker first means the next load
+// can detect "we already clicked" and stop instead of re-clicking.
+function markAttempted(queue, index, afterSave) {
+  const attempted = queue.attempted ? { ...queue.attempted } : {};
+  attempted[index] = true;
+  const updatedQueue = { ...queue, attempted };
+  saveQueue(updatedQueue, () => afterSave(updatedQueue));
+}
+
 // Best-effort: find search result containers on the page. Unverified
 // selector — Amazon's markup changes frequently and by locale/experiment.
 function findSearchResults() {
@@ -176,17 +195,19 @@ function processPinnedItem(queue, index, item, pin) {
       }
     }
 
-    try {
-      addBtn.click();
-    } catch (err) {
-      console.warn('[amazon-cart] pinned add-to-cart click failed:', err);
-      recordResult(queue, index, 'not_found', { pinnedAsin: pin.asin });
-      return;
-    }
+    markAttempted(queue, index, (updatedQueue) => {
+      try {
+        addBtn.click();
+      } catch (err) {
+        console.warn('[amazon-cart] pinned add-to-cart click failed:', err);
+        recordResult(updatedQueue, index, 'not_found', { pinnedAsin: pin.asin });
+        return;
+      }
 
-    setTimeout(() => {
-      recordResult(queue, index, 'added', { addedAsin: pin.asin });
-    }, SETTLE_DELAY_MS);
+      setTimeout(() => {
+        recordResult(updatedQueue, index, 'added', { addedAsin: pin.asin });
+      }, SETTLE_DELAY_MS);
+    });
   }, SETTLE_DELAY_MS);
 }
 
@@ -215,6 +236,15 @@ function processCurrentItem(queue, pinned) {
   const item = items[currentIndex];
   if (!item || !item.name) {
     markNotFound(queue, currentIndex);
+    return;
+  }
+
+  if (alreadyAttempted(queue, currentIndex)) {
+    // We already clicked add-to-cart for this item on a previous load, but
+    // never got to confirm it (the page reloaded before recordResult could
+    // run). Assume the click took effect instead of clicking again — this
+    // is what stops a reload from turning into an unbounded re-add loop.
+    recordResult(queue, currentIndex, 'added', { assumedFromPriorAttempt: true });
     return;
   }
 
@@ -261,19 +291,21 @@ function processCurrentItem(queue, pinned) {
 
     setQuantity(resultEl, item.quantity || 1);
 
-    try {
-      addToCartControl.click();
-    } catch (err) {
-      console.warn('[amazon-cart] add-to-cart click failed:', err);
-      markNotFound(queue, currentIndex, { candidates });
-      return;
-    }
+    markAttempted(queue, currentIndex, (updatedQueue) => {
+      try {
+        addToCartControl.click();
+      } catch (err) {
+        console.warn('[amazon-cart] add-to-cart click failed:', err);
+        markNotFound(updatedQueue, currentIndex, { candidates });
+        return;
+      }
 
-    // Give the click a moment to register (cart update, confirmation
-    // modal, etc.) before we consider the item added.
-    setTimeout(() => {
-      recordResult(queue, currentIndex, 'added', { candidates, addedAsin: best.asin });
-    }, SETTLE_DELAY_MS);
+      // Give the click a moment to register (cart update, confirmation
+      // modal, etc.) before we consider the item added.
+      setTimeout(() => {
+        recordResult(updatedQueue, currentIndex, 'added', { candidates, addedAsin: best.asin });
+      }, SETTLE_DELAY_MS);
+    });
   }, SETTLE_DELAY_MS);
 }
 
