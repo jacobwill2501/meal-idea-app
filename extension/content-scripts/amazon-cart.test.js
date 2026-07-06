@@ -105,4 +105,17 @@ describe('amazon-cart reload-loop regression', () => {
     expect(store.cartQueue.results[0]).toMatchObject({ status: 'added' });
     expect(store.cartQueue.currentIndex).toBe(1);
   });
+
+  test('does not click or navigate when the queue is paused', () => {
+    const clickSpy = jest.fn();
+    renderSearchResultsPage(clickSpy);
+    store.cartQueue.paused = true;
+
+    require('./amazon-cart.js');
+    jest.advanceTimersByTime(800);
+
+    expect(clickSpy).not.toHaveBeenCalled();
+    expect(store.cartQueue.attempted).toBeUndefined();
+    expect(store.cartQueue.results[0]).toBeUndefined();
+  });
 });

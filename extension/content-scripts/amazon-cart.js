@@ -219,6 +219,13 @@ function processCurrentItem(queue, pinned) {
     return;
   }
 
+  if (queue.paused) {
+    // Paused: take no action (no click, no navigation) until the popup
+    // clears this flag. Resuming re-navigates the tab to pick processing
+    // back up, since a paused tab may be sitting idle on a stale page.
+    return;
+  }
+
   if (Array.isArray(queue.results) && queue.results[currentIndex]) {
     // currentIndex already has a recorded result (e.g. storage left
     // mid-state) — skip forward past it and any other already-resolved
