@@ -29,16 +29,18 @@ export async function addMealItems(weekMeals) {
   const modifiedKeys = new Set();
 
   weekMeals.forEach((meal) => {
-    [meal.protein, meal.vegetable, meal.carb, meal.extras].forEach((field) => {
-      if (!field || !field.trim()) return;
-      field.split(',').map((t) => t.trim()).filter(Boolean).forEach((text) => {
-        const key = normalizeKey(text);
+    [meal.protein, meal.vegetable, meal.carb, meal.extras].forEach((rows) => {
+      (rows || []).forEach(({ name, qty }) => {
+        if (!name || !name.trim()) return;
+        const key = normalizeKey(name);
+        const safeQty = Math.max(1, qty || 1);
         if (list[key]) {
           if (!list[key].meals.includes(meal.name)) {
+            list[key].count += safeQty;
             list[key].meals.push(meal.name);
           }
         } else {
-          list[key] = { displayText: text, count: 1, meals: [meal.name], checked: false };
+          list[key] = { displayText: name.trim(), count: safeQty, meals: [meal.name], checked: false };
         }
         modifiedKeys.add(key);
       });

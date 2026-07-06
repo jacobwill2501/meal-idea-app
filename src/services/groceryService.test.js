@@ -76,7 +76,13 @@ describe('getList', () => {
 
 describe('addMealItems', () => {
   it('adds protein, vegetable, carb, extras as separate entries', async () => {
-    const meals = [{ name: 'Tacos', protein: 'Chicken', vegetable: 'Peppers', carb: 'Rice', extras: 'Salsa' }];
+    const meals = [{
+      name: 'Tacos',
+      protein: [{ name: 'Chicken', qty: 1 }],
+      vegetable: [{ name: 'Peppers', qty: 1 }],
+      carb: [{ name: 'Rice', qty: 1 }],
+      extras: [{ name: 'Salsa', qty: 1 }],
+    }];
     const list = await addMealItems(meals);
     expect(list['chicken'].displayText).toBe('Chicken');
     expect(list['peppers'].displayText).toBe('Peppers');
@@ -84,73 +90,65 @@ describe('addMealItems', () => {
     expect(list['salsa'].displayText).toBe('Salsa');
   });
 
-  it('skips blank extras', async () => {
-    const meals = [{ name: 'Tacos', protein: 'Chicken', vegetable: 'Peppers', carb: 'Rice', extras: '' }];
+  it('skips rows with a blank name', async () => {
+    const meals = [{
+      name: 'Tacos',
+      protein: [{ name: 'Chicken', qty: 1 }],
+      vegetable: [{ name: 'Peppers', qty: 1 }],
+      carb: [{ name: 'Rice', qty: 1 }],
+      extras: [{ name: '', qty: 1 }],
+    }];
     const list = await addMealItems(meals);
     expect(Object.keys(list)).not.toContain('');
     expect(Object.keys(list).length).toBe(3);
   });
 
-  it('deduplicates across two meals without incrementing count', async () => {
+  it('treats a missing category array as empty', async () => {
+    const meals = [{ name: 'Tacos', protein: [{ name: 'Chicken', qty: 1 }], vegetable: [], carb: [], extras: undefined }];
+    const list = await addMealItems(meals);
+    expect(Object.keys(list).length).toBe(1);
+  });
+
+  it('carries a row quantity into a new grocery item', async () => {
+    const meals = [{ name: 'Tacos', protein: [{ name: 'Chicken', qty: 3 }], vegetable: [], carb: [], extras: [] }];
+    const list = await addMealItems(meals);
+    expect(list['chicken'].count).toBe(3);
+  });
+
+  it('sums quantities across two meals sharing an ingredient', async () => {
     const meals = [
-      { name: 'Tacos', protein: 'Chicken', vegetable: 'Peppers', carb: 'Rice', extras: '' },
-      { name: 'Stir Fry', protein: 'Chicken', vegetable: 'Broccoli', carb: 'Rice', extras: '' },
+      { name: 'Tacos', protein: [{ name: 'Chicken', qty: 1 }], vegetable: [{ name: 'Peppers', qty: 1 }], carb: [{ name: 'Rice', qty: 1 }], extras: [] },
+      { name: 'Stir Fry', protein: [{ name: 'Chicken', qty: 2 }], vegetable: [{ name: 'Broccoli', qty: 1 }], carb: [{ name: 'Rice', qty: 1 }], extras: [] },
     ];
     const list = await addMealItems(meals);
-    expect(list['chicken'].count).toBe(1);
+    expect(list['chicken'].count).toBe(3); // 1 (Tacos) + 2 (Stir Fry)
     expect(list['chicken'].meals).toEqual(['Tacos', 'Stir Fry']);
-    expect(list['rice'].count).toBe(1);
+    expect(list['rice'].count).toBe(2); // 1 + 1
     expect(list['peppers'].count).toBe(1);
   });
 
-  it('re-syncing the same meal twice does not duplicate meal names or reset an adjusted count', async () => {
-    const meal = { name: 'Tacos', protein: 'Chicken', vegetable: 'Peppers', carb: 'Rice', extras: '' };
+  it('re-syncing the same meal twice does not duplicate meal names or double-count', async () => {
+    const meal = { name: 'Tacos', protein: [{ name: 'Chicken', qty: 2 }], vegetable: [], carb: [], extras: [] };
     await addMealItems([meal]);
-    await updateQuantity('chicken', 5);
+    await updateQuantity('chicken', 9);
 
     const list = await addMealItems([meal]);
 
     expect(list['chicken'].meals).toEqual(['Tacos']);
-    expect(list['chicken'].count).toBe(5);
+    expect(list['chicken'].count).toBe(9);
+  });
+
+  it('only contributes quantity once when a meal lists the same ingredient name twice', async () => {
+    const meal = { name: 'Bowl', protein: [{ name: 'Chicken', qty: 2 }, { name: 'Chicken', qty: 5 }], vegetable: [], carb: [], extras: [] };
+    const list = await addMealItems([meal]);
+    expect(list['chicken'].count).toBe(2);
+    expect(list['chicken'].meals).toEqual(['Bowl']);
   });
 
   it('normalizes keys to lowercase', async () => {
-    const meals = [{ name: 'Tacos', protein: 'Grilled Chicken', vegetable: '', carb: '', extras: '' }];
+    const meals = [{ name: 'Tacos', protein: [{ name: 'Grilled Chicken', qty: 1 }], vegetable: [], carb: [], extras: [] }];
     const list = await addMealItems(meals);
     expect(list['grilled chicken']).toBeDefined();
-  });
-
-  it('splits comma-separated extras into individual items', async () => {
-    const meals = [{ name: 'Stir Fry', protein: 'Tofu', vegetable: 'Broccoli', carb: 'Rice', extras: 'soy sauce, sesame oil, garlic' }];
-    const list = await addMealItems(meals);
-    expect(list['soy sauce']).toBeDefined();
-    expect(list['sesame oil']).toBeDefined();
-    expect(list['garlic']).toBeDefined();
-    expect(list['soy sauce, sesame oil, garlic']).toBeUndefined();
-  });
-
-  it('splits comma-separated protein into individual items', async () => {
-    const meals = [{ name: 'Bowl', protein: 'chicken, shrimp', vegetable: '', carb: '', extras: '' }];
-    const list = await addMealItems(meals);
-    expect(list['chicken']).toBeDefined();
-    expect(list['shrimp']).toBeDefined();
-    expect(list['chicken, shrimp']).toBeUndefined();
-  });
-
-  it('trims whitespace around comma-separated values', async () => {
-    const meals = [{ name: 'Tacos', protein: '', vegetable: '', carb: '', extras: '  lime juice  ,  cilantro  ' }];
-    const list = await addMealItems(meals);
-    expect(list['lime juice']).toBeDefined();
-    expect(list['lime juice'].displayText).toBe('lime juice');
-    expect(list['cilantro']).toBeDefined();
-  });
-
-  it('skips empty segments from double-commas or trailing commas', async () => {
-    const meals = [{ name: 'Burritos', protein: '', vegetable: '', carb: '', extras: 'salsa,,  , guac' }];
-    const list = await addMealItems(meals);
-    expect(Object.keys(list).length).toBe(2);
-    expect(list['salsa']).toBeDefined();
-    expect(list['guac']).toBeDefined();
   });
 });
 
@@ -166,7 +164,7 @@ describe('addStapleItems', () => {
   });
 
   it('merges into an existing meal entry by adding the staple count', async () => {
-    await addMealItems([{ name: 'Tacos', protein: 'Chicken', vegetable: '', carb: '', extras: '' }]);
+    await addMealItems([{ name: 'Tacos', protein: [{ name: 'Chicken', qty: 1 }], vegetable: [], carb: [], extras: [] }]);
     await addStapleItems([{ id: '1', name: 'Chicken', checked: false }]);
     const list = await getList();
     expect(list['chicken'].count).toBe(2); // 1 (meal) + 1 (staple default)
@@ -174,7 +172,7 @@ describe('addStapleItems', () => {
   });
 
   it('merges a staple with count > 1 into an existing grocery item', async () => {
-    await addMealItems([{ name: 'Tacos', protein: 'Chicken', vegetable: '', carb: '', extras: '' }]);
+    await addMealItems([{ name: 'Tacos', protein: [{ name: 'Chicken', qty: 1 }], vegetable: [], carb: [], extras: [] }]);
     await addStapleItems([{ id: '1', name: 'Chicken', checked: false, count: 3 }]);
     const list = await getList();
     expect(list['chicken'].count).toBe(4); // 1 (meal) + 3 (staple)
@@ -194,7 +192,7 @@ describe('addManualItem', () => {
   });
 
   it('does not overwrite an existing entry', async () => {
-    await addMealItems([{ name: 'Tacos', protein: 'Chicken', vegetable: '', carb: '', extras: '' }]);
+    await addMealItems([{ name: 'Tacos', protein: [{ name: 'Chicken', qty: 1 }], vegetable: [], carb: [], extras: [] }]);
     await addManualItem('Chicken');
     const list = await getList();
     expect(list['chicken'].count).toBe(1);
