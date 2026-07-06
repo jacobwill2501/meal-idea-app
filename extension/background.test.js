@@ -341,4 +341,109 @@ describe('background service worker', () => {
       expect(chromeFake.__tabUrls[100]).toBe(GroceryUrls.wholeFoodsSearchUrl('turkey'));
     });
   });
+
+  describe('popup commands', () => {
+    test('popup:start creates a fresh queue on an existing amazon tab and navigates to item 0', async () => {
+      delete store.cartQueue;
+      chromeFake.__amazonTabs = [{ id: 7 }];
+      const items = [{ name: 'avocados', quantity: 3 }];
+      const response = await sendMessage(chromeFake, { type: 'popup:start', items });
+      expect(response).toMatchObject({ ok: true });
+      expect(store.cartQueue).toMatchObject({
+        items,
+        results: [],
+        attempted: {},
+        navAttempts: {},
+        currentIndex: 0,
+        paused: false,
+        tabId: 7,
+      });
+      expect(chromeFake.__tabUrls[7]).toBe(GroceryUrls.wholeFoodsSearchUrl('avocados'));
+    });
+
+    test('popup:start opens a new tab when no amazon tab exists', async () => {
+      delete store.cartQueue;
+      chromeFake.__amazonTabs = [];
+      const response = await sendMessage(chromeFake, {
+        type: 'popup:start',
+        items: [{ name: 'avocados', quantity: 3 }],
+      });
+      expect(response).toMatchObject({ ok: true });
+      expect(store.cartQueue.tabId).toBe(100);
+    });
+
+    test('popup:start starts a pinned first item on its product page', async () => {
+      delete store.cartQueue;
+      store.pinnedProducts = { avocados: { asin: 'B001' } };
+      chromeFake.__amazonTabs = [{ id: 7 }];
+      await sendMessage(chromeFake, {
+        type: 'popup:start',
+        items: [{ name: 'avocados', quantity: 3 }],
+      });
+      expect(chromeFake.__tabUrls[7]).toBe(GroceryUrls.wholeFoodsProductUrl('B001'));
+    });
+
+    test('popup:start rejects an empty item list', async () => {
+      const response = await sendMessage(chromeFake, { type: 'popup:start', items: [] });
+      expect(response).toMatchObject({ ok: false, reason: 'no-items' });
+    });
+
+    test('popup:toggle pause parks the queue tab on the WFM storefront', async () => {
+      // Parking is the point: like the Skip button (the only control that
+      // stopped the 2026-07-06 runaway loop), navigation tears down
+      // whatever is running in the page. A storage flag alone only helps
+      // future page loads.
+      const response = await sendMessage(chromeFake, { type: 'popup:toggle' });
+      expect(response).toMatchObject({ ok: true, paused: true });
+      expect(store.cartQueue.paused).toBe(true);
+      expect(chromeFake.__tabUrls[1]).toBe(GroceryUrls.wholeFoodsStorefrontUrl());
+    });
+
+    test('popup:toggle resume navigates back to the current item', async () => {
+      store.cartQueue.paused = true;
+      const response = await sendMessage(chromeFake, { type: 'popup:toggle' });
+      expect(response).toMatchObject({ ok: true, paused: false });
+      expect(store.cartQueue.paused).toBe(false);
+      expect(chromeFake.__tabUrls[1]).toBe(GroceryUrls.wholeFoodsSearchUrl('avocados'));
+    });
+
+    test('popup:skip records skipped and moves on', async () => {
+      const response = await sendMessage(chromeFake, { type: 'popup:skip', index: 0 });
+      expect(response).toMatchObject({ ok: true });
+      expect(store.cartQueue.results[0]).toMatchObject({ name: 'avocados', status: 'skipped' });
+      expect(store.cartQueue.currentIndex).toBe(1);
+      expect(chromeFake.__tabUrls[1]).toBe(GroceryUrls.wholeFoodsSearchUrl('turkey'));
+    });
+
+    test('popup:skip while paused records but leaves the tab parked', async () => {
+      store.cartQueue.paused = true;
+      await sendMessage(chromeFake, { type: 'popup:skip', index: 0 });
+      expect(store.cartQueue.results[0]).toMatchObject({ status: 'skipped' });
+      expect(store.cartQueue.currentIndex).toBe(1);
+      expect(chromeFake.tabs.update).not.toHaveBeenCalled();
+    });
+
+    test('popup:retry clears the slot, attempted, and nav attempts, then rewinds and navigates', async () => {
+      store.cartQueue.results = [{ name: 'avocados', quantity: 3, status: 'not_found' }];
+      store.cartQueue.attempted = { 0: true };
+      store.cartQueue.navAttempts = { 0: 4 };
+      store.cartQueue.currentIndex = 1;
+      const response = await sendMessage(chromeFake, { type: 'popup:retry', index: 0 });
+      expect(response).toMatchObject({ ok: true });
+      expect(store.cartQueue.results[0]).toBeFalsy();
+      expect(store.cartQueue.attempted[0]).toBeUndefined();
+      expect(store.cartQueue.navAttempts[0]).toBeUndefined();
+      expect(store.cartQueue.currentIndex).toBe(0);
+      expect(chromeFake.__tabUrls[1]).toBe(GroceryUrls.wholeFoodsSearchUrl('avocados'));
+    });
+
+    test('popup:retry recreates the queue tab if it was closed', async () => {
+      store.cartQueue.results = [{ name: 'avocados', quantity: 3, status: 'not_found' }];
+      store.cartQueue.currentIndex = 1;
+      chromeFake.__deadTabIds.add(1);
+      await sendMessage(chromeFake, { type: 'popup:retry', index: 0 });
+      expect(store.cartQueue.tabId).toBe(100);
+      expect(chromeFake.__tabUrls[100]).toBe(GroceryUrls.wholeFoodsSearchUrl('avocados'));
+    });
+  });
 });

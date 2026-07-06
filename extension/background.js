@@ -217,10 +217,91 @@ async function handleReportResult(message, sender) {
   return { ok: true };
 }
 
+function getOrCreateAmazonTab() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ url: 'https://www.amazon.com/*' }, (tabs) => {
+      if (tabs && tabs.length > 0) return resolve(tabs[0]);
+      chrome.tabs.create({ url: 'https://www.amazon.com/', active: false }, resolve);
+    });
+  });
+}
+
+async function handleStart(message) {
+  const items = message.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    return { ok: false, reason: 'no-items' };
+  }
+  const { pinned } = await getState();
+  const tab = await getOrCreateAmazonTab();
+  const queue = {
+    items,
+    results: [],
+    attempted: {},
+    navAttempts: {},
+    currentIndex: 0,
+    paused: false,
+    tabId: tab.id,
+  };
+  await setQueue(queue);
+  log('queue started:', items.length, 'items on tab', tab.id);
+  await navigateQueueTab(queue, itemUrl(items[0], pinned));
+  return { ok: true };
+}
+
+async function handleToggle() {
+  const { queue, pinned } = await getState();
+  if (!queueActive(queue)) return { ok: false, reason: 'no-active-queue' };
+  const paused = !queue.paused;
+  const updated = { ...queue, paused };
+  await setQueue(updated);
+  if (paused) {
+    // Parking the tab is what actually stops a runaway page — the same
+    // mechanism that made Skip work when the old flag-only Pause didn't.
+    log('paused — parking queue tab');
+    await navigateQueueTab(updated, GroceryUrls.wholeFoodsStorefrontUrl());
+  } else {
+    log('resumed — navigating to current item');
+    await navigateQueueTab(updated, itemUrl(updated.items[updated.currentIndex], pinned));
+  }
+  return { ok: true, paused };
+}
+
+async function handleSkip(message) {
+  const { queue, pinned } = await getState();
+  if (!queue || !Array.isArray(queue.items) || !queue.items[message.index]) {
+    return { ok: false, reason: 'bad-index' };
+  }
+  await recordAndAdvance(queue, pinned, message.index, 'skipped');
+  return { ok: true };
+}
+
+async function handleRetry(message) {
+  const { queue, pinned } = await getState();
+  if (!queue || !Array.isArray(queue.items) || !queue.items[message.index]) {
+    return { ok: false, reason: 'bad-index' };
+  }
+  const results = Array.isArray(queue.results) ? queue.results.slice() : [];
+  results[message.index] = undefined;
+  const attempted = { ...(queue.attempted || {}) };
+  delete attempted[message.index];
+  const navAttempts = { ...(queue.navAttempts || {}) };
+  delete navAttempts[message.index];
+  const updated = { ...queue, results, attempted, navAttempts, currentIndex: message.index };
+  await setQueue(updated);
+  if (!updated.paused) {
+    await navigateQueueTab(updated, itemUrl(updated.items[message.index], pinned));
+  }
+  return { ok: true };
+}
+
 const HANDLERS = {
   'cs:pageReady': handlePageReady,
   'cs:requestClick': handleRequestClick,
   'cs:reportResult': handleReportResult,
+  'popup:start': handleStart,
+  'popup:toggle': handleToggle,
+  'popup:skip': handleSkip,
+  'popup:retry': handleRetry,
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
