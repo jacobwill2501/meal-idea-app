@@ -57,14 +57,22 @@ export async function addMealItems(weekMeals) {
 export async function addStapleItems(staples) {
   const list = await getList();
   const batch = writeBatch(db);
+  const modifiedKeys = new Set();
 
   staples.forEach((staple) => {
     if (!staple.name || !staple.name.trim()) return;
     const key = normalizeKey(staple.name);
-    if (!list[key]) {
-      list[key] = { displayText: staple.name.trim(), count: 1, meals: [], checked: false };
-      batch.set(doc(db, COLLECTION, key), list[key]);
+    const safeCount = Math.max(1, staple.count || 1);
+    if (list[key]) {
+      list[key].count += safeCount;
+    } else {
+      list[key] = { displayText: staple.name.trim(), count: safeCount, meals: [], checked: false };
     }
+    modifiedKeys.add(key);
+  });
+
+  modifiedKeys.forEach((key) => {
+    batch.set(doc(db, COLLECTION, key), list[key], { merge: true });
   });
 
   await batch.commit();

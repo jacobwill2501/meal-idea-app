@@ -155,17 +155,35 @@ describe('addMealItems', () => {
 });
 
 describe('addStapleItems', () => {
-  it('adds staple names with count 1', async () => {
+  it('adds staple names with count 1 when the staple has no count', async () => {
     const list = await addStapleItems([{ id: '1', name: 'Eggs', checked: false }]);
     expect(list['eggs']).toEqual({ displayText: 'Eggs', count: 1, meals: [], checked: false });
   });
 
-  it('does not overwrite an existing meal entry', async () => {
+  it('uses the staple count when creating a new grocery item', async () => {
+    const list = await addStapleItems([{ id: '1', name: 'Eggs', checked: false, count: 2 }]);
+    expect(list['eggs'].count).toBe(2);
+  });
+
+  it('merges into an existing meal entry by adding the staple count', async () => {
     await addMealItems([{ name: 'Tacos', protein: 'Chicken', vegetable: '', carb: '', extras: '' }]);
     await addStapleItems([{ id: '1', name: 'Chicken', checked: false }]);
     const list = await getList();
-    expect(list['chicken'].count).toBe(1); // unchanged
+    expect(list['chicken'].count).toBe(2); // 1 (meal) + 1 (staple default)
     expect(list['chicken'].meals).toEqual(['Tacos']); // unchanged
+  });
+
+  it('merges a staple with count > 1 into an existing grocery item', async () => {
+    await addMealItems([{ name: 'Tacos', protein: 'Chicken', vegetable: '', carb: '', extras: '' }]);
+    await addStapleItems([{ id: '1', name: 'Chicken', checked: false, count: 3 }]);
+    const list = await getList();
+    expect(list['chicken'].count).toBe(4); // 1 (meal) + 3 (staple)
+  });
+
+  it('adds the staple count again on a second call (not idempotent by design)', async () => {
+    await addStapleItems([{ id: '1', name: 'Eggs', checked: false, count: 1 }]);
+    const list = await addStapleItems([{ id: '1', name: 'Eggs', checked: false, count: 1 }]);
+    expect(list['eggs'].count).toBe(2);
   });
 });
 
