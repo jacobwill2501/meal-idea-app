@@ -16,6 +16,8 @@ const itemListEl = document.getElementById('item-list');
 const automatedModeEl = document.getElementById('automated-mode');
 const sendToCartBtn = document.getElementById('send-to-cart-btn');
 const cartQueueListEl = document.getElementById('cart-queue-list');
+const queueToggleBtn = document.getElementById('queue-toggle-btn');
+const queueStatusEl = document.getElementById('queue-status');
 const clearDataBtn = document.getElementById('clear-data-btn');
 
 let latestExportData = null;
@@ -98,6 +100,12 @@ function statusLabel(status) {
       return 'Ambiguous';
     case 'not_found':
       return 'Not found';
+    case 'in_progress':
+      return 'In progress';
+    case 'paused':
+      return 'Paused';
+    case 'skipped':
+      return 'Skipped';
     default:
       return 'Pending';
   }
@@ -169,8 +177,24 @@ function renderCandidatePicker(item, index, candidates) {
   return picker;
 }
 
+function renderQueueStatus(queue) {
+  const active = queue && Array.isArray(queue.items) && queue.currentIndex < queue.items.length;
+
+  if (!active) {
+    queueStatusEl.hidden = true;
+    queueToggleBtn.hidden = true;
+    return;
+  }
+
+  queueStatusEl.hidden = false;
+  queueStatusEl.textContent = queue.paused ? 'Paused' : 'Running';
+  queueToggleBtn.hidden = false;
+  queueToggleBtn.textContent = queue.paused ? 'Resume' : 'Pause';
+}
+
 function renderCartQueue(queue, pinned) {
   cartQueueListEl.innerHTML = '';
+  renderQueueStatus(queue);
 
   if (!queue || !Array.isArray(queue.items)) {
     sendToCartBtn.disabled = false;
@@ -183,7 +207,12 @@ function renderCartQueue(queue, pinned) {
 
   queue.items.forEach((item, index) => {
     const result = results[index];
-    const status = result ? result.status : 'pending';
+    const isCurrent = !result && index === queue.currentIndex;
+    const status = result
+      ? result.status
+      : isCurrent
+      ? (queue.paused ? 'paused' : 'in_progress')
+      : 'pending';
 
     const li = document.createElement('li');
     li.className = 'item-row';
@@ -242,6 +271,15 @@ function renderCartQueue(queue, pinned) {
         chrome.tabs.create({ url: wholeFoodsSearchUrl(item.name), active: false });
       });
       actions.appendChild(manualBtn);
+    }
+
+    if (status === 'in_progress' || status === 'paused') {
+      const skipBtn = document.createElement('button');
+      skipBtn.type = 'button';
+      skipBtn.className = 'btn btn-secondary btn-small';
+      skipBtn.textContent = 'Skip';
+      skipBtn.addEventListener('click', () => skipItem(index));
+      actions.appendChild(skipBtn);
     }
 
     li.appendChild(info);
@@ -319,6 +357,57 @@ function startCartQueue() {
   });
 }
 
+function toggleQueuePause() {
+  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
+    const queue = result[CART_QUEUE_KEY];
+    if (!queue || !Array.isArray(queue.items) || queue.currentIndex >= queue.items.length) {
+      return;
+    }
+
+    const paused = !queue.paused;
+    const updatedQueue = { ...queue, paused };
+
+    chrome.storage.local.set({ [CART_QUEUE_KEY]: updatedQueue }, () => {
+      if (!paused && queue.tabId != null) {
+        // Resuming: the tab may be idle on a stale page (it no-oped while
+        // paused), so re-navigate it to the current item to kick
+        // processing off again.
+        navigateTabToItem(queue.tabId, queue.items[queue.currentIndex]);
+      }
+    });
+  });
+}
+
+function firstUnresolvedIndex(items, results, fromIndex) {
+  let idx = fromIndex;
+  while (idx < items.length && results[idx]) {
+    idx += 1;
+  }
+  return idx;
+}
+
+function skipItem(index) {
+  chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
+    const queue = result[CART_QUEUE_KEY];
+    if (!queue || !Array.isArray(queue.items) || !queue.items[index]) {
+      return;
+    }
+
+    const item = queue.items[index];
+    const results = Array.isArray(queue.results) ? queue.results.slice() : [];
+    results[index] = { name: item.name, quantity: item.quantity, status: 'skipped' };
+
+    const nextIndex = firstUnresolvedIndex(queue.items, results, index + 1);
+    const updatedQueue = { ...queue, results, currentIndex: nextIndex };
+
+    chrome.storage.local.set({ [CART_QUEUE_KEY]: updatedQueue }, () => {
+      if (!queue.paused && nextIndex < queue.items.length && queue.tabId != null) {
+        navigateTabToItem(queue.tabId, queue.items[nextIndex]);
+      }
+    });
+  });
+}
+
 function retryItem(index) {
   chrome.storage.local.get(CART_QUEUE_KEY, (result) => {
     const queue = result[CART_QUEUE_KEY];
@@ -329,9 +418,13 @@ function retryItem(index) {
     const results = Array.isArray(queue.results) ? queue.results.slice() : [];
     results[index] = undefined;
 
+    const attempted = queue.attempted ? { ...queue.attempted } : {};
+    delete attempted[index];
+
     const updatedQueue = {
       ...queue,
       results,
+      attempted,
       currentIndex: index,
     };
 
@@ -375,6 +468,7 @@ openAllBtn.addEventListener('click', () => {
 });
 
 sendToCartBtn.addEventListener('click', startCartQueue);
+queueToggleBtn.addEventListener('click', toggleQueuePause);
 
 clearDataBtn.addEventListener('click', () => {
   chrome.storage.local.remove([EXPORT_KEY, CART_QUEUE_KEY]);
