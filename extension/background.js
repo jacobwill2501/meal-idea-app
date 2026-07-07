@@ -17,6 +17,8 @@ if (typeof importScripts === 'function') {
 const CART_QUEUE_KEY = 'cartQueue';
 const PINNED_KEY = 'pinnedProducts';
 const MAX_NAV_ATTEMPTS = 3;
+const DEBUG_LOG_KEY = 'debugLog';
+const DEBUG_LOG_MAX = 200;
 
 function log(...args) {
   console.info('[wf-cart:bg]', new Date().toISOString(), ...args);
@@ -48,6 +50,34 @@ function withQueueLock(fn) {
   return result;
 }
 
+// Append one entry to the persistent debug ring buffer (the popup's
+// "Copy debug log" button reads it). Callers hold the mutation lock and
+// await this, so appends cannot interleave or reorder.
+function logEvent(event, details) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([DEBUG_LOG_KEY], (result) => {
+      const entries = Array.isArray(result[DEBUG_LOG_KEY]) ? result[DEBUG_LOG_KEY] : [];
+      entries.push({ t: new Date().toISOString(), event, ...(details || {}) });
+      chrome.storage.local.set({ [DEBUG_LOG_KEY]: entries.slice(-DEBUG_LOG_MAX) }, () =>
+        resolve()
+      );
+    });
+  });
+}
+
+// Undefined fields are dropped by storage serialization, so a sparse
+// summary is fine.
+function summarizeResponse(response) {
+  if (!response) return null;
+  return {
+    action: response.action,
+    reason: response.reason,
+    granted: response.granted,
+    ok: response.ok,
+    paused: response.paused,
+  };
+}
+
 function queueActive(queue) {
   return Boolean(
     queue && Array.isArray(queue.items) && queue.currentIndex < queue.items.length
@@ -73,12 +103,17 @@ function navigateQueueTab(queue, url) {
     chrome.tabs.update(queue.tabId, { url }, () => {
       if (!chrome.runtime.lastError) {
         log('navigated tab', queue.tabId, '→', url);
-        return resolve(queue);
+        logEvent('navigate', { tabId: queue.tabId, url }).then(() => resolve(queue));
+        return;
       }
       log('queue tab gone, recreating:', chrome.runtime.lastError.message);
       chrome.tabs.create({ url, active: false }, (tab) => {
         const updated = { ...queue, tabId: tab.id };
-        setQueue(updated).then(() => resolve(updated));
+        setQueue(updated).then(() =>
+          logEvent('navigate', { tabId: tab.id, url, recreatedTab: true }).then(() =>
+            resolve(updated)
+          )
+        );
       });
     });
   });
@@ -100,6 +135,12 @@ async function recordAndAdvance(queue, pinned, index, status, extra) {
   let updated = { ...queue, results, currentIndex: nextIndex };
   await setQueue(updated);
   log('recorded item', index, 'as', status, '— next index', nextIndex);
+  await logEvent('recorded', {
+    index,
+    status,
+    reason: (extra || {}).reason,
+    nextIndex,
+  });
   if (nextIndex < updated.items.length && !updated.paused) {
     updated = await navigateQueueTab(updated, itemUrl(updated.items[nextIndex], pinned));
   }
@@ -307,7 +348,18 @@ const HANDLERS = {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = message && HANDLERS[message.type];
   if (!handler) return false;
-  withQueueLock(() => handler(message, sender))
+  withQueueLock(async () => {
+    const response = await handler(message, sender);
+    await logEvent('message', {
+      type: message.type,
+      fromTab: sender.tab ? sender.tab.id : null,
+      index: typeof message.index === 'number' ? message.index : undefined,
+      status: message.status,
+      url: message.url,
+      response: summarizeResponse(response),
+    });
+    return response;
+  })
     .then(sendResponse)
     .catch((err) => {
       log('handler error for', message.type, err);

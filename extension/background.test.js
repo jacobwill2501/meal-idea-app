@@ -446,4 +446,48 @@ describe('background service worker', () => {
       expect(chromeFake.__tabUrls[100]).toBe(GroceryUrls.wholeFoodsSearchUrl('avocados'));
     });
   });
+
+  describe('debug log', () => {
+    test('logs each handled message with a response summary', async () => {
+      const url = GroceryUrls.wholeFoodsSearchUrl('avocados');
+      await sendMessage(chromeFake, { type: 'cs:pageReady', url }, QUEUE_TAB);
+      const entries = store.debugLog;
+      expect(Array.isArray(entries)).toBe(true);
+      const msgEntry = entries.find((e) => e.event === 'message');
+      expect(msgEntry).toMatchObject({
+        type: 'cs:pageReady',
+        fromTab: 1,
+        response: { action: 'scrapeSearch' },
+      });
+      expect(typeof msgEntry.t).toBe('string');
+    });
+
+    test('reportResult produces recorded, navigate, and message entries in order', async () => {
+      await sendMessage(
+        chromeFake,
+        { type: 'cs:reportResult', index: 0, status: 'added', extra: { addedAsin: 'B001' } },
+        QUEUE_TAB
+      );
+      const events = store.debugLog.map((e) => e.event);
+      expect(events).toEqual(['recorded', 'navigate', 'message']);
+      expect(store.debugLog[0]).toMatchObject({ index: 0, status: 'added', nextIndex: 1 });
+      expect(store.debugLog[1]).toMatchObject({
+        tabId: 1,
+        url: GroceryUrls.wholeFoodsSearchUrl('turkey'),
+      });
+    });
+
+    test('ring buffer caps at 200 entries, dropping the oldest', async () => {
+      store.debugLog = Array.from({ length: 200 }, (_, i) => ({
+        t: 'old',
+        event: 'filler',
+        i,
+      }));
+      const url = GroceryUrls.wholeFoodsSearchUrl('avocados');
+      await sendMessage(chromeFake, { type: 'cs:pageReady', url }, QUEUE_TAB);
+      expect(store.debugLog).toHaveLength(200);
+      expect(store.debugLog[0].i).toBe(1); // filler #0 dropped
+      expect(store.debugLog[199].event).toBe('message');
+    });
+  });
 });
