@@ -142,7 +142,7 @@ describe('amazon-cart content script', () => {
   });
 
   test('reports not_found when no search results render', async () => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = '<div data-asin="B009">unrelated node</div>';
     global.chrome = makeChromeFake({
       'cs:pageReady': {
         action: 'scrapeSearch',
@@ -156,6 +156,15 @@ describe('amazon-cart content script', () => {
 
     const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
     expect(report).toMatchObject({ index: 0, status: 'not_found' });
+    // Diagnostics capture what the page actually was, so an all-not_found
+    // run can be diagnosed from the popup's debug log.
+    expect(report.extra.diagnostics.url).toBe(window.location.href);
+    expect(typeof report.extra.diagnostics.pageTitle).toBe('string');
+    expect(report.extra.diagnostics.selectorCounts).toEqual({
+      searchResult: 0,
+      anyAsin: 1,
+      resultItems: 0,
+    });
   });
 
   test('addPinned sets quantity, asks permission, clicks, and reports added', async () => {

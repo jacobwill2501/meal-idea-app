@@ -120,7 +120,21 @@ async function handleScrapeSearch(index, item) {
   await settle();
   const resultEls = findSearchResults();
   if (resultEls.length === 0) {
-    return reportResult(index, 'not_found');
+    // Nothing matched our selector. Capture what the page actually was so
+    // an all-not_found run can be diagnosed from the popup's debug log
+    // (redirected page? markup drift? rendered too slowly?).
+    return reportResult(index, 'not_found', {
+      diagnostics: {
+        url: window.location.href,
+        pageTitle: document.title,
+        selectorCounts: {
+          searchResult: document.querySelectorAll('[data-component-type="s-search-result"]')
+            .length,
+          anyAsin: document.querySelectorAll('[data-asin]').length,
+          resultItems: document.querySelectorAll('.s-result-item').length,
+        },
+      },
+    });
   }
 
   const candidates = captureCandidates(resultEls);
