@@ -190,7 +190,10 @@ describe('amazon-cart content script', () => {
   });
 
   test('addPinned reports not_found when the add button is missing', async () => {
-    document.body.innerHTML = '';
+    // A decoy control that LOOKS like add-to-cart but matches none of our
+    // selectors — the survey must capture it for the debug log.
+    document.body.innerHTML =
+      '<button id="wfm-atc-widget" aria-label="Add to cart">Add</button>';
     global.chrome = makeChromeFake({
       'cs:pageReady': {
         action: 'addPinned',
@@ -206,5 +209,41 @@ describe('amazon-cart content script', () => {
     const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
     expect(report).toMatchObject({ index: 1, status: 'not_found' });
     expect(report.extra.pinnedAsin).toBe('B001');
+    expect(report.extra.diagnostics.url).toBe(window.location.href);
+    expect(report.extra.diagnostics.addToCartCandidates).toEqual([
+      {
+        tag: 'button',
+        id: 'wfm-atc-widget',
+        name: null,
+        ariaLabel: 'Add to cart',
+        testId: null,
+        text: 'Add',
+      },
+    ]);
+  });
+
+  test('addPinned falls back to alternate known add-to-cart controls', async () => {
+    document.body.innerHTML =
+      '<select id="quantity"><option value="1">1</option><option value="3">3</option></select>' +
+      '<input type="submit" name="submit.addToCart" value="Add to Cart">';
+    document
+      .querySelector('input[name="submit.addToCart"]')
+      .addEventListener('click', clickSpy);
+    global.chrome = makeChromeFake({
+      'cs:pageReady': {
+        action: 'addPinned',
+        index: 1,
+        item: { name: 'avocados', quantity: 3 },
+        pin: { asin: 'B001' },
+      },
+      'cs:requestClick': { granted: true },
+      'cs:reportResult': { ok: true },
+    });
+    require('./amazon-cart.js');
+    await flushAsync();
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
+    expect(report).toMatchObject({ index: 1, status: 'added' });
   });
 });

@@ -167,13 +167,69 @@ async function handleScrapeSearch(index, item) {
   return reportResult(index, 'added', { candidates, addedAsin: best.asin });
 }
 
+// Known add-to-cart control variants on product pages. The classic retail
+// buybox uses #add-to-cart-button; ALM (Whole Foods / Fresh) buyboxes have
+// shipped different controls (2026-07-06 debug log: none of the pinned
+// pages had #add-to-cart-button). All unverified against live pages — the
+// survey below is what reveals the real one when these all miss.
+function findPinnedAddToCartControl() {
+  return (
+    document.getElementById('add-to-cart-button') ||
+    document.getElementById('freshAddToCartButton') ||
+    document.querySelector(
+      'input[name="submit.addToCart"], button[name="submit.addToCart"]'
+    ) ||
+    null
+  );
+}
+
+// Best-effort census of controls that look like add-to-cart, for the debug
+// log. Evidence only — never clicked.
+function surveyAddToCartControls() {
+  const candidates = document.querySelectorAll(
+    'button, input[type="submit"], input[type="button"], [role="button"]'
+  );
+  const looksLikeAddToCart = /add.{0,3}(to.{0,3})?cart/i;
+  return Array.from(candidates)
+    .filter((el) => {
+      const haystack = [
+        el.id,
+        el.getAttribute('name'),
+        el.getAttribute('aria-label'),
+        el.getAttribute('data-testid'),
+        el.value || '',
+        (el.textContent || '').slice(0, 80),
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return looksLikeAddToCart.test(haystack);
+    })
+    .slice(0, 10)
+    .map((el) => ({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      name: el.getAttribute('name'),
+      ariaLabel: el.getAttribute('aria-label'),
+      testId: el.getAttribute('data-testid'),
+      text: (el.value || el.textContent || '').trim().slice(0, 60),
+    }));
+}
+
 async function handleAddPinned(index, item, pin) {
   await settle();
-  const addBtn = document.getElementById('add-to-cart-button');
+  const addBtn = findPinnedAddToCartControl();
   if (!addBtn) {
-    // Product gone or page layout unrecognized — surface for manual
-    // recovery (popup offers retry / open manually / unpin).
-    return reportResult(index, 'not_found', { pinnedAsin: pin.asin });
+    // No recognized add-to-cart control — surface for manual recovery and
+    // record a survey of lookalike controls so the debug log reveals the
+    // selector we should have used.
+    return reportResult(index, 'not_found', {
+      pinnedAsin: pin.asin,
+      diagnostics: {
+        url: window.location.href,
+        pageTitle: document.title,
+        addToCartCandidates: surveyAddToCartControls(),
+      },
+    });
   }
 
   const qtySelect = document.getElementById('quantity');

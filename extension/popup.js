@@ -134,6 +134,13 @@ function copyDebugLog() {
 // Inline detail for a not_found row so common failures are readable
 // without the debug log.
 function notFoundDetail(result) {
+  if (result.pinnedAsin && result.diagnostics) {
+    const candidates = result.diagnostics.addToCartCandidates;
+    const n = Array.isArray(candidates) ? candidates.length : 0;
+    return `no add-to-cart control on pinned product page (${n} lookalike${
+      n === 1 ? '' : 's'
+    } logged)`;
+  }
   if (result.reason === 'page-mismatch') {
     return `page mismatch — landed on ${result.lastUrl || 'unknown URL'}`;
   }
