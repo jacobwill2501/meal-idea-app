@@ -108,22 +108,30 @@ All `cartQueue` state is owned by the background service worker
   reports. Console logging (`[wf-cart:bg]` / `[wf-cart:cs]`) still exists
   for live debugging.
 
-## Live verification checklist (still open)
+## Live verification status (as of 2026-07-07, v0.3.5)
 
-Run one small queue against a live, logged-in amazon.com session and check:
+**Verified live** (full 8-item pinned queue, cleared cart, all quantities
+confirmed in the WFM cart):
 
-1. **WFM cart routing:** with `almBrandId=VUZHIFdob2xlIEZvb2Rz` on search
-   (`&i=wholefoods`) and product (`&fpw=alm`) URLs, do added items land in
-   the *Whole Foods* cart (not the main Amazon cart)? If not, capture the
-   URL of a search you reach by hand from the WFM storefront and update
-   `lib/urls.js` to match it.
-2. **Selectors:** do `[data-component-type="s-search-result"]`,
-   `button[name="submit.addToCart"]`, `#add-to-cart-button`, and
-   `#quantity` still match? Iterate in `content-scripts/amazon-cart.js`.
-3. **Runaway watch:** after one item auto-adds, watch the cart count for
-   ~30s. If it keeps climbing with no `[wf-cart:cs] clicking` log lines,
-   the page itself is looping (quantity-stepper feedback) — the fix then
-   belongs in `setQuantity`, and Pause will still stop it by parking.
+- WFM cart routing: `almBrandId` + `fpw=alm` product URLs add to the
+  *Whole Foods* cart, not the main Amazon cart.
+- Pinned-page add-to-cart: `#freshAddToCartButton` is the live ALM buy-box
+  control; the asin-matched `fresh-add-to-cart` span is the guard against
+  clicking recommendation-carousel cards (a stray click added a wrong
+  product before asin scoping).
+- Quantity: the ALM `qs-widget` dropdown works when scoped by the buy
+  box's `qsUID`; every `added` result records
+  `quantity: {requested, set, method, verified}`.
+- An unavailable pinned product (buy box with no add-to-cart) correctly
+  reports `not_found` with an `addToCartCandidates` survey instead of
+  clicking something else.
+
+**Still unverified live** (no run has exercised it yet):
+
+- The search flow (`scrapeSearch`): `[data-component-type="s-search-result"]`
+  containers, `submit.addToCart` on search results, and auto-matching —
+  every live run so far used pinned items. First run with unpinned items
+  should be watched with the debug log open.
 
 ## Risks
 
