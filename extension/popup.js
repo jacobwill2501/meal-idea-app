@@ -25,8 +25,6 @@ const uploadErrorEl = document.getElementById('upload-error');
 
 let latestExportData = null;
 
-const { wholeFoodsSearchUrl } = GroceryUrls;
-
 function sendCommand(message, callback) {
   chrome.runtime.sendMessage(message, (response) => {
     if (chrome.runtime.lastError) {
@@ -137,7 +135,7 @@ function renderItems(items) {
     openBtn.className = 'btn btn-secondary';
     openBtn.textContent = 'Open in Whole Foods';
     openBtn.addEventListener('click', () => {
-      chrome.tabs.create({ url: wholeFoodsSearchUrl(item.name), active: false });
+      chrome.tabs.create({ url: GroceryUrls.wholeFoodsSearchUrl(item.name), active: false });
     });
 
     li.appendChild(info);
@@ -344,7 +342,7 @@ function renderCartQueue(queue, pinned) {
       manualBtn.className = 'btn btn-secondary btn-small';
       manualBtn.textContent = 'Open manually';
       manualBtn.addEventListener('click', () => {
-        chrome.tabs.create({ url: wholeFoodsSearchUrl(item.name), active: false });
+        chrome.tabs.create({ url: GroceryUrls.wholeFoodsSearchUrl(item.name), active: false });
       });
       actions.appendChild(manualBtn);
     }
@@ -437,7 +435,7 @@ openAllBtn.addEventListener('click', () => {
       return;
     }
     exportData.items.forEach((item) => {
-      chrome.tabs.create({ url: wholeFoodsSearchUrl(item.name), active: false });
+      chrome.tabs.create({ url: GroceryUrls.wholeFoodsSearchUrl(item.name), active: false });
     });
   });
 });
