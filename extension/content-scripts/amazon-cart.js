@@ -193,31 +193,34 @@ function parseQsOption(span) {
   }
 }
 
-// The buy box's fresh-add-to-cart declarative span carries JSON whose qsUID
-// names its OWN quantity widget (button id qs-widget-button-<qsUID>-announce)
-// and tags that widget's dropdown options. This is the only reliable link:
-// ALM pages also carry qs-widgets for cart-sidebar rows and carousels, and
-// clicking one of those mutates a DIFFERENT product's cart line (2026-07-07
-// debug log: soy milk's qty-4 click landed on the paper-plates line).
-function findBuyboxQsUID() {
-  const span = document.querySelector('span[data-action="fresh-add-to-cart"]');
-  if (!span) return null;
-  try {
-    const data = JSON.parse(span.getAttribute('data-fresh-add-to-cart'));
-    return data && data.qsUID ? String(data.qsUID) : null;
-  } catch (err) {
-    return null;
+// Find the fresh-add-to-cart declarative span belonging to a SPECIFIC
+// product. These spans exist on the buy box AND on every recommendation/
+// buy-it-again card, so matching the JSON's asin against the pinned asin
+// is what keeps us from clicking a stranger's card (2026-07-07 bug: a
+// carousel Medium Avocado was added from the sourdough page).
+function findFreshAtcSpanForAsin(asin) {
+  const spans = document.querySelectorAll('span[data-action="fresh-add-to-cart"]');
+  for (const span of Array.from(spans)) {
+    try {
+      const data = JSON.parse(span.getAttribute('data-fresh-add-to-cart'));
+      if (data && data.asin === asin) {
+        return { span, qsUID: data.qsUID ? String(data.qsUID) : null };
+      }
+    } catch (err) {
+      // Malformed card JSON — skip it.
+    }
   }
+  return null;
 }
 
 // Set quantity on a pinned product page. Classic retail pages use a
 // #quantity <select>; ALM (Whole Foods) buy boxes use the custom qs-widget
 // dropdown, which we drive by clicking — but ONLY the widget tied to the
-// buy box via qsUID (see findBuyboxQsUID). If no widget can be tied to the
+// buy box via qsUID (see findFreshAtcSpanForAsin). If no widget can be tied to the
 // buy box, we touch nothing: mutating the wrong cart line is worse than
 // shipping quantity 1. Returns an outcome record for the debug log;
 // `verified` reports whether the widget label read "Qty: N" afterward.
-async function setPinnedQuantity(desired) {
+async function setPinnedQuantity(desired, pinAsin) {
   if (!desired || desired <= 1) {
     return { requested: desired || 1, set: 1, method: 'default' };
   }
@@ -235,7 +238,8 @@ async function setPinnedQuantity(desired) {
     return { requested: desired, set: desired, method: 'select' };
   }
 
-  const qsUID = findBuyboxQsUID();
+  const fresh = findFreshAtcSpanForAsin(pinAsin);
+  const qsUID = fresh ? fresh.qsUID : null;
   if (!qsUID) {
     return { requested: desired, set: 1, method: 'no-buybox-widget' };
   }
@@ -289,21 +293,23 @@ async function setPinnedQuantity(desired) {
   };
 }
 
-// Known add-to-cart control variants on product pages. The classic retail
-// buybox uses #add-to-cart-button; ALM (Whole Foods / Fresh) buyboxes have
-// shipped different controls (2026-07-06 debug log: none of the pinned
-// pages had #add-to-cart-button). All unverified against live pages — the
-// survey below is what reveals the real one when these all miss.
-function findPinnedAddToCartControl() {
-  return (
-    document.getElementById('add-to-cart-button') ||
-    document.getElementById('freshAddToCartButton') ||
-    document.querySelector('span[data-action="fresh-add-to-cart"] input.a-button-input') ||
-    document.querySelector(
-      'input[name="submit.addToCart"], button[name="submit.addToCart"]'
-    ) ||
-    null
-  );
+// Find the buy box add-to-cart control for the pinned product. The two id
+// lookups are buy-box-unique; the fresh-span path is asin-scoped. There is
+// deliberately NO document-wide fallback — reporting not_found (with a
+// survey) beats clicking a control that belongs to a different product.
+function findPinnedAddToCartControl(pinAsin) {
+  const retailBtn = document.getElementById('add-to-cart-button');
+  if (retailBtn) return { el: retailBtn, kind: 'add-to-cart-button' };
+  const freshBtn = document.getElementById('freshAddToCartButton');
+  if (freshBtn) return { el: freshBtn, kind: 'freshAddToCartButton' };
+  const fresh = findFreshAtcSpanForAsin(pinAsin);
+  if (fresh) {
+    return {
+      el: fresh.span.querySelector('input.a-button-input') || fresh.span,
+      kind: 'fresh-span',
+    };
+  }
+  return null;
 }
 
 // Best-effort census of controls that look like add-to-cart, for the debug
@@ -340,8 +346,8 @@ function surveyAddToCartControls() {
 
 async function handleAddPinned(index, item, pin) {
   await settle();
-  const addBtn = findPinnedAddToCartControl();
-  if (!addBtn) {
+  const control = findPinnedAddToCartControl(pin.asin);
+  if (!control) {
     // No recognized add-to-cart control — surface for manual recovery and
     // record a survey of lookalike controls so the debug log reveals the
     // selector we should have used.
@@ -355,7 +361,7 @@ async function handleAddPinned(index, item, pin) {
     });
   }
 
-  const quantityOutcome = await setPinnedQuantity(item.quantity || 1);
+  const quantityOutcome = await setPinnedQuantity(item.quantity || 1, pin.asin);
   log('quantity outcome:', JSON.stringify(quantityOutcome));
   if (quantityOutcome.method !== 'default') {
     // Give the page a moment to apply the quantity before adding.
@@ -364,7 +370,7 @@ async function handleAddPinned(index, item, pin) {
 
   let clicked;
   try {
-    clicked = await clickIfGranted(index, addBtn, `pinned product ${pin.asin}`);
+    clicked = await clickIfGranted(index, control.el, `pinned product ${pin.asin}`);
   } catch (err) {
     console.warn('[wf-cart:cs] pinned add-to-cart click failed:', err);
     return reportResult(index, 'not_found', { pinnedAsin: pin.asin });
@@ -372,7 +378,11 @@ async function handleAddPinned(index, item, pin) {
   if (!clicked) return undefined;
 
   await settle();
-  return reportResult(index, 'added', { addedAsin: pin.asin, quantity: quantityOutcome });
+  return reportResult(index, 'added', {
+    addedAsin: pin.asin,
+    quantity: quantityOutcome,
+    control: control.kind,
+  });
 }
 
 async function init() {

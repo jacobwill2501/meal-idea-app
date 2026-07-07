@@ -222,18 +222,17 @@ describe('amazon-cart content script', () => {
     ]);
   });
 
-  test('addPinned falls back to alternate known add-to-cart controls', async () => {
+  test('addPinned falls back to the asin-matched fresh-add-to-cart span', async () => {
     document.body.innerHTML =
-      '<select id="quantity"><option value="1">1</option><option value="3">3</option></select>' +
-      '<input type="submit" name="submit.addToCart" value="Add to Cart">';
-    document
-      .querySelector('input[name="submit.addToCart"]')
-      .addEventListener('click', clickSpy);
+      '<span class="a-declarative" data-action="fresh-add-to-cart" ' +
+      'data-fresh-add-to-cart=\'{"qsUID":"atfc-2","asin":"B001"}\'>' +
+      '<span class="a-button"><input class="a-button-input" type="submit"></span></span>';
+    document.querySelector('input.a-button-input').addEventListener('click', clickSpy);
     global.chrome = makeChromeFake({
       'cs:pageReady': {
         action: 'addPinned',
         index: 1,
-        item: { name: 'avocados', quantity: 3 },
+        item: { name: 'avocados', quantity: 1 },
         pin: { asin: 'B001' },
       },
       'cs:requestClick': { granted: true },
@@ -245,6 +244,37 @@ describe('amazon-cart content script', () => {
     expect(clickSpy).toHaveBeenCalledTimes(1);
     const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
     expect(report).toMatchObject({ index: 1, status: 'added' });
+    expect(report.extra.control).toBe('fresh-span');
+  });
+
+  test("addPinned never clicks another product's fresh-add-to-cart card", async () => {
+    // A recommendation-carousel card for a DIFFERENT product — clicking it
+    // adds the wrong item to the cart (2026-07-07 bug: a Medium Avocado
+    // landed in the cart from the sourdough page's carousel).
+    document.body.innerHTML =
+      '<span class="a-declarative" data-action="fresh-add-to-cart" ' +
+      'data-fresh-add-to-cart=\'{"qsUID":"atfc-9","asin":"B0MEDAVO"}\'>' +
+      '<span class="a-button"><input class="a-button-input" type="submit" ' +
+      'aria-label="Add to Cart, Medium Avocado"></span></span>';
+    const decoySpy = jest.fn();
+    document.querySelector('input.a-button-input').addEventListener('click', decoySpy);
+    global.chrome = makeChromeFake({
+      'cs:pageReady': {
+        action: 'addPinned',
+        index: 0,
+        item: { name: 'sourdough', quantity: 1 },
+        pin: { asin: 'B0CP5ZPQ46' },
+      },
+      'cs:reportResult': { ok: true },
+    });
+    require('./amazon-cart.js');
+    await flushAsync();
+
+    expect(decoySpy).not.toHaveBeenCalled();
+    const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
+    expect(report).toMatchObject({ index: 0, status: 'not_found' });
+    expect(report.extra.pinnedAsin).toBe('B0CP5ZPQ46');
+    expect(Array.isArray(report.extra.diagnostics.addToCartCandidates)).toBe(true);
   });
 
   function renderAlmProductPage(clickSpy, maxQty) {
@@ -322,7 +352,7 @@ describe('amazon-cart content script', () => {
         action: 'addPinned',
         index: 0,
         item: { name: 'bananas', quantity: 7 },
-        pin: { asin: 'B002' },
+        pin: { asin: 'B001' },
       },
       'cs:requestClick': { granted: true },
       'cs:reportResult': { ok: true },
