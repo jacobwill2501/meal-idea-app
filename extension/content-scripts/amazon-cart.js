@@ -167,6 +167,92 @@ async function handleScrapeSearch(index, item) {
   return reportResult(index, 'added', { candidates, addedAsin: best.asin });
 }
 
+// Poll for a condition; ALM widgets render asynchronously after clicks.
+function pollFor(getValue, timeoutMs, intervalMs) {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    function attempt() {
+      const value = getValue();
+      if (value) return resolve(value);
+      if (Date.now() > deadline) return resolve(null);
+      setTimeout(attempt, intervalMs);
+    }
+    attempt();
+  });
+}
+
+function parseQsOptionId(span) {
+  try {
+    const data = JSON.parse(span.getAttribute('data-qs-widget-dropdown-decl'));
+    return typeof data.id === 'number' ? data.id : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Set quantity on a pinned product page. Classic retail pages use a
+// #quantity <select>; ALM (Whole Foods) buyboxes use the custom qs-widget
+// dropdown — a button that renders a listbox on click, each option a
+// span[data-action="qs-widget-dropdown-decl"] whose JSON carries id: N
+// (live DOM captured 2026-07-06). The listbox offers a bounded range, so a
+// larger request clamps to the highest offered quantity. Returns an
+// outcome record that goes into the debug log via the added report.
+async function setPinnedQuantity(desired) {
+  if (!desired || desired <= 1) {
+    return { requested: desired || 1, set: 1, method: 'default' };
+  }
+
+  const qtySelect = document.getElementById('quantity');
+  if (qtySelect && qtySelect.tagName === 'SELECT') {
+    const optionExists = Array.from(qtySelect.options).some(
+      (opt) => opt.value === String(desired)
+    );
+    if (!optionExists) {
+      return { requested: desired, set: 1, method: 'select-option-missing' };
+    }
+    qtySelect.value = String(desired);
+    qtySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    return { requested: desired, set: desired, method: 'select' };
+  }
+
+  const qsButton = document.querySelector('button[id^="qs-widget-button-"]');
+  if (!qsButton) {
+    return { requested: desired, set: 1, method: 'no-quantity-control' };
+  }
+  qsButton.click();
+
+  const optionSpans = await pollFor(
+    () => {
+      const spans = document.querySelectorAll(
+        'span[data-action="qs-widget-dropdown-decl"]'
+      );
+      return spans.length > 0 ? Array.from(spans) : null;
+    },
+    3000,
+    150
+  );
+  if (!optionSpans) {
+    return { requested: desired, set: 1, method: 'qs-dropdown-missing' };
+  }
+
+  const options = optionSpans
+    .map((span) => ({ span, id: parseQsOptionId(span) }))
+    .filter((opt) => opt.id !== null)
+    .sort((a, b) => a.id - b.id);
+  const exact = options.find((opt) => opt.id === desired);
+  const best = exact || options.filter((opt) => opt.id < desired).pop() || null;
+  if (!best) {
+    return { requested: desired, set: 1, method: 'qs-no-usable-option' };
+  }
+  const target = best.span.querySelector('li') || best.span;
+  target.click();
+  return {
+    requested: desired,
+    set: best.id,
+    method: exact ? 'qs-widget' : 'qs-widget-clamped',
+  };
+}
+
 // Known add-to-cart control variants on product pages. The classic retail
 // buybox uses #add-to-cart-button; ALM (Whole Foods / Fresh) buyboxes have
 // shipped different controls (2026-07-06 debug log: none of the pinned
@@ -232,16 +318,11 @@ async function handleAddPinned(index, item, pin) {
     });
   }
 
-  const qtySelect = document.getElementById('quantity');
-  const quantity = item.quantity || 1;
-  if (qtySelect && qtySelect.tagName === 'SELECT') {
-    const optionExists = Array.from(qtySelect.options).some(
-      (opt) => opt.value === String(quantity)
-    );
-    if (optionExists) {
-      qtySelect.value = String(quantity);
-      qtySelect.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+  const quantityOutcome = await setPinnedQuantity(item.quantity || 1);
+  log('quantity outcome:', JSON.stringify(quantityOutcome));
+  if (quantityOutcome.method !== 'default') {
+    // Give the page a moment to apply the quantity before adding.
+    await settle();
   }
 
   let clicked;
@@ -254,7 +335,7 @@ async function handleAddPinned(index, item, pin) {
   if (!clicked) return undefined;
 
   await settle();
-  return reportResult(index, 'added', { addedAsin: pin.asin });
+  return reportResult(index, 'added', { addedAsin: pin.asin, quantity: quantityOutcome });
 }
 
 async function init() {

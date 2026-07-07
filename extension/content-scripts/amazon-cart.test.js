@@ -246,4 +246,77 @@ describe('amazon-cart content script', () => {
     const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
     expect(report).toMatchObject({ index: 1, status: 'added' });
   });
+
+  function renderAlmProductPage(clickSpy, maxQty) {
+    const options = Array.from({ length: maxQty }, (_, i) => i + 1)
+      .map(
+        (n) =>
+          `<span class="a-declarative" data-action="qs-widget-dropdown-decl" ` +
+          `data-qs-widget-dropdown-decl='{"qsUID":"atfc-1","id":${n}}'>` +
+          `<li role="option" id="qs-item-${n}">${n}</li></span>`
+      )
+      .join('');
+    document.body.innerHTML = `
+      <span id="qs-widget-button-atfc-1" class="a-button"><span class="a-button-inner">
+        <button id="qs-widget-button-atfc-1-announce" type="button">Qty: 1</button>
+      </span></span>
+      <div id="qs-dropdown">${options}</div>
+      <span id="freshAddToCartButton" class="a-button"><input class="a-button-input" type="submit"></span>
+    `;
+    document.getElementById('freshAddToCartButton').addEventListener('click', clickSpy);
+  }
+
+  test('addPinned drives the ALM qs-widget dropdown to the requested quantity', async () => {
+    renderAlmProductPage(clickSpy, 5);
+    const qtyClicks = [];
+    document.querySelectorAll('li[role="option"]').forEach((li) => {
+      li.addEventListener('click', () => qtyClicks.push(li.id));
+    });
+    global.chrome = makeChromeFake({
+      'cs:pageReady': {
+        action: 'addPinned',
+        index: 0,
+        item: { name: 'avocado', quantity: 3 },
+        pin: { asin: 'B001' },
+      },
+      'cs:requestClick': { granted: true },
+      'cs:reportResult': { ok: true },
+    });
+    require('./amazon-cart.js');
+    await flushAsync();
+
+    expect(qtyClicks).toEqual(['qs-item-3']);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
+    expect(report).toMatchObject({ index: 0, status: 'added' });
+    expect(report.extra.quantity).toEqual({ requested: 3, set: 3, method: 'qs-widget' });
+  });
+
+  test('addPinned clamps to the highest offered qs-widget quantity', async () => {
+    renderAlmProductPage(clickSpy, 5);
+    const qtyClicks = [];
+    document.querySelectorAll('li[role="option"]').forEach((li) => {
+      li.addEventListener('click', () => qtyClicks.push(li.id));
+    });
+    global.chrome = makeChromeFake({
+      'cs:pageReady': {
+        action: 'addPinned',
+        index: 0,
+        item: { name: 'bananas', quantity: 7 },
+        pin: { asin: 'B002' },
+      },
+      'cs:requestClick': { granted: true },
+      'cs:reportResult': { ok: true },
+    });
+    require('./amazon-cart.js');
+    await flushAsync();
+
+    expect(qtyClicks).toEqual(['qs-item-5']);
+    const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
+    expect(report.extra.quantity).toEqual({
+      requested: 7,
+      set: 5,
+      method: 'qs-widget-clamped',
+    });
+  });
 });
