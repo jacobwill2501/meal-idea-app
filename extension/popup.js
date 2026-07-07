@@ -98,7 +98,20 @@ function uploadGroceryList() {
         uploadErrorEl.hidden = false;
         return;
       }
-      chrome.storage.local.set({ [EXPORT_KEY]: result.data });
+      chrome.storage.local.set({ [EXPORT_KEY]: result.data }, () => {
+        // A finished queue's per-item statuses describe the PREVIOUS list,
+        // so clear it — otherwise the send-to-cart section keeps showing
+        // stale items after an upload. A queue still mid-run is left alone
+        // (clearing it would silently kill the run; pause/skip still work).
+        chrome.storage.local.get(CART_QUEUE_KEY, (res) => {
+          const queue = res[CART_QUEUE_KEY];
+          const active =
+            queue && Array.isArray(queue.items) && queue.currentIndex < queue.items.length;
+          if (queue && !active) {
+            chrome.storage.local.remove(CART_QUEUE_KEY);
+          }
+        });
+      });
       // storage.onChanged re-renders the export list from the new copy.
     });
   });
