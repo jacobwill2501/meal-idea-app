@@ -7,6 +7,7 @@
 const EXPORT_KEY = 'groceryExport';
 const CART_QUEUE_KEY = 'cartQueue';
 const PINNED_KEY = 'pinnedProducts';
+const DEBUG_LOG_KEY = 'debugLog';
 
 const exportMetaEl = document.getElementById('export-meta');
 const emptyStateEl = document.getElementById('empty-state');
@@ -22,6 +23,8 @@ const clearDataBtn = document.getElementById('clear-data-btn');
 const uploadSectionEl = document.getElementById('upload-section');
 const uploadBtn = document.getElementById('upload-btn');
 const uploadErrorEl = document.getElementById('upload-error');
+const copyLogBtn = document.getElementById('copy-log-btn');
+const copyLogStatusEl = document.getElementById('copy-log-status');
 
 let latestExportData = null;
 
@@ -99,6 +102,48 @@ function uploadGroceryList() {
       // storage.onChanged re-renders the export list from the new copy.
     });
   });
+}
+
+function formatDebugLog(entries, queue) {
+  const lines = entries.map((entry) => {
+    const { t, event, ...rest } = entry;
+    return `${t} ${event} ${JSON.stringify(rest)}`;
+  });
+  lines.push('--- cartQueue snapshot ---');
+  lines.push(JSON.stringify(queue || null, null, 2));
+  return lines.join('\n');
+}
+
+function copyDebugLog() {
+  chrome.storage.local.get([DEBUG_LOG_KEY, CART_QUEUE_KEY], (result) => {
+    const entries = Array.isArray(result[DEBUG_LOG_KEY]) ? result[DEBUG_LOG_KEY] : [];
+    const text = formatDebugLog(entries, result[CART_QUEUE_KEY]);
+    navigator.clipboard.writeText(text).then(
+      () => {
+        copyLogStatusEl.textContent = `Copied ${entries.length} log entries + queue snapshot.`;
+        copyLogStatusEl.hidden = false;
+      },
+      () => {
+        copyLogStatusEl.textContent = 'Copy failed — try again with the popup focused.';
+        copyLogStatusEl.hidden = false;
+      }
+    );
+  });
+}
+
+// Inline detail for a not_found row so common failures are readable
+// without the debug log.
+function notFoundDetail(result) {
+  if (result.reason === 'page-mismatch') {
+    return `page mismatch — landed on ${result.lastUrl || 'unknown URL'}`;
+  }
+  if (result.diagnostics) {
+    return `0 matching results at ${result.diagnostics.url}`;
+  }
+  if (result.reason === 'malformed-item') {
+    return 'item had no name';
+  }
+  return null;
 }
 
 function formatTimestamp(isoString) {
@@ -329,6 +374,16 @@ function renderCartQueue(queue, pinned) {
     statusEl.textContent = statusLabel(status);
     actions.appendChild(statusEl);
 
+    if (status === 'not_found' && result) {
+      const detail = notFoundDetail(result);
+      if (detail) {
+        const detailEl = document.createElement('span');
+        detailEl.className = 'status-detail';
+        detailEl.textContent = detail;
+        info.appendChild(detailEl);
+      }
+    }
+
     if (status === 'ambiguous' || status === 'not_found') {
       const retryBtn = document.createElement('button');
       retryBtn.type = 'button';
@@ -443,9 +498,11 @@ openAllBtn.addEventListener('click', () => {
 sendToCartBtn.addEventListener('click', startCartQueue);
 queueToggleBtn.addEventListener('click', toggleQueuePause);
 uploadBtn.addEventListener('click', uploadGroceryList);
+copyLogBtn.addEventListener('click', copyDebugLog);
 
 clearDataBtn.addEventListener('click', () => {
-  chrome.storage.local.remove([EXPORT_KEY, CART_QUEUE_KEY]);
+  chrome.storage.local.remove([EXPORT_KEY, CART_QUEUE_KEY, DEBUG_LOG_KEY]);
+  copyLogStatusEl.hidden = true;
 });
 
 // Keep the popup in sync if the export or cart queue changes while the

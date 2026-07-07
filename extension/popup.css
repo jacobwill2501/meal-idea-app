@@ -286,3 +286,11 @@ body {
   background: #f3f0ff;
   color: #5b3fa8;
 }
+
+.status-detail {
+  display: block;
+  font-size: 11px;
+  color: #777;
+  margin-top: 2px;
+  word-break: break-all;
+}

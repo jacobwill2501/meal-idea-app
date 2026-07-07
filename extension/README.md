@@ -101,9 +101,12 @@ All `cartQueue` state is owned by the background service worker
   Pause button not sticking) cannot clobber each other.
 - Pause **parks the queue tab** on the WFM storefront — navigation is what
   reliably stops a runaway page (it's why Skip worked when Pause didn't).
-- Diagnostic logging: filter the tab console for `[wf-cart:cs]` and the
-  service-worker console for `[wf-cart:bg]`. If a runaway add ever recurs,
-  those lines show exactly which click was granted and why.
+- Diagnostics: the worker keeps a 200-entry ring buffer of every message,
+  navigation, and recorded result in `chrome.storage.local` (`debugLog`).
+  Use the popup's **Copy debug log** button to copy it (plus the current
+  queue snapshot, which carries per-item `not_found` diagnostics) for bug
+  reports. Console logging (`[wf-cart:bg]` / `[wf-cart:cs]`) still exists
+  for live debugging.
 
 ## Live verification checklist (still open)
 
