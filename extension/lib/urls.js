@@ -12,8 +12,23 @@
 
 const WHOLE_FOODS_ALM_BRAND_ID = 'VUZHIFdob2xlIEZvb2Rz'; // base64("UFG Whole Foods")
 
+// Deliberately duplicated from lib/matcher.js's stripMealAnnotation so
+// this lib stays standalone (the worker, popup, and tests each load these
+// files independently): trailing meal annotations like
+// "avocado (picadillo, Salmon Bowls)" must not reach the search query.
+function stripTrailingParens(name) {
+  const original = String(name || '').trim();
+  let result = original;
+  let prev;
+  do {
+    prev = result;
+    result = result.replace(/\s*\([^()]*\)\s*$/, '').trim();
+  } while (result !== prev);
+  return result || original;
+}
+
 function wholeFoodsSearchUrl(itemName) {
-  const query = encodeURIComponent(itemName);
+  const query = encodeURIComponent(stripTrailingParens(itemName));
   return `https://www.amazon.com/s?k=${query}&i=wholefoods&almBrandId=${WHOLE_FOODS_ALM_BRAND_ID}`;
 }
 
@@ -34,7 +49,7 @@ function isSearchUrlFor(urlString, itemName) {
   }
   if (!url.pathname.startsWith('/s')) return false;
   const k = url.searchParams.get('k') || '';
-  return k.toLowerCase() === String(itemName || '').toLowerCase();
+  return k.toLowerCase() === stripTrailingParens(itemName).toLowerCase();
 }
 
 function isProductUrlFor(urlString, asin) {

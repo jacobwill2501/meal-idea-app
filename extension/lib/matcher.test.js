@@ -1,4 +1,5 @@
 const { normalizeTokens, normalizeKey, scoreTitle, pickBest } = require('./matcher');
+const GroceryMatcher = require('./matcher');
 
 describe('normalizeTokens', () => {
   test('lowercases, strips punctuation, drops stop words', () => {
@@ -77,5 +78,42 @@ describe('pickBest', () => {
       c('A2', 'Boneless Chicken Breast'),
     ]);
     expect(result.scored.map((s) => s.candidate.asin)).toEqual(['A2', 'A1']);
+  });
+});
+
+describe('meal annotations', () => {
+  test('stripMealAnnotation strips a trailing meal annotation', () => {
+    expect(GroceryMatcher.stripMealAnnotation('avocado (picadillo, Salmon Bowls)')).toBe(
+      'avocado'
+    );
+  });
+
+  test('stripMealAnnotation strips stacked trailing groups but keeps mid-name parens', () => {
+    expect(GroceryMatcher.stripMealAnnotation('salsa (mild) (tacos)')).toBe('salsa');
+    expect(GroceryMatcher.stripMealAnnotation('half (&) half cream')).toBe(
+      'half (&) half cream'
+    );
+  });
+
+  test('stripMealAnnotation returns the original when stripping would leave nothing', () => {
+    expect(GroceryMatcher.stripMealAnnotation('(picadillo)')).toBe('(picadillo)');
+  });
+
+  test('normalizeKey ignores meal annotations so existing pins still match', () => {
+    expect(GroceryMatcher.normalizeKey('avocado (picadillo, Salmon Bowls)')).toBe(
+      GroceryMatcher.normalizeKey('avocado')
+    );
+  });
+
+  test('pickBest ignores meal annotations when scoring', () => {
+    const { decision, best } = GroceryMatcher.pickBest(
+      'avocado (picadillo, Salmon Bowls)',
+      [
+        { asin: 'B1', title: 'Avocado' },
+        { asin: 'B2', title: 'Guacamole Dip' },
+      ]
+    );
+    expect(decision).toBe('auto_add');
+    expect(best.asin).toBe('B1');
   });
 });

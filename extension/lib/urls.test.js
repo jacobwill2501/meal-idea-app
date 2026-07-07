@@ -44,4 +44,17 @@ describe('GroceryUrls', () => {
     expect(GroceryUrls.isProductUrlFor('https://www.amazon.com/dp/B002', 'B001')).toBe(false);
     expect(GroceryUrls.isProductUrlFor('not a url', 'B001')).toBe(false);
   });
+
+  test('search URL strips trailing meal annotations from item names', () => {
+    const url = new URL(
+      GroceryUrls.wholeFoodsSearchUrl('avocado (picadillo, Salmon Bowls)')
+    );
+    expect(url.searchParams.get('k')).toBe('avocado');
+  });
+
+  test('isSearchUrlFor treats annotated and stripped names as the same search', () => {
+    const url = GroceryUrls.wholeFoodsSearchUrl('avocado (picadillo, Salmon Bowls)');
+    expect(GroceryUrls.isSearchUrlFor(url, 'avocado (picadillo, Salmon Bowls)')).toBe(true);
+    expect(GroceryUrls.isSearchUrlFor(url, 'avocado')).toBe(true);
+  });
 });

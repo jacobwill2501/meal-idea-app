@@ -18,8 +18,24 @@ function normalizeTokens(name) {
     .filter((token) => token && !STOP_WORDS.has(token));
 }
 
+// Grocery names exported from the app's weekly plan carry a trailing meal
+// annotation — "avocado (picadillo, Salmon Bowls)" — which must not reach
+// search queries, match scoring, or pin keys. Only TRAILING parenthetical
+// groups are stripped (repeatedly, for stacked ones); mid-name parens
+// survive. If stripping would leave nothing, the original name wins.
+function stripMealAnnotation(name) {
+  const original = String(name || '').trim();
+  let result = original;
+  let prev;
+  do {
+    prev = result;
+    result = result.replace(/\s*\([^()]*\)\s*$/, '').trim();
+  } while (result !== prev);
+  return result || original;
+}
+
 function normalizeKey(name) {
-  return normalizeTokens(name).join(' ');
+  return normalizeTokens(stripMealAnnotation(name)).join(' ');
 }
 
 function scoreTitle(itemTokens, title) {
@@ -30,7 +46,7 @@ function scoreTitle(itemTokens, title) {
 }
 
 function pickBest(itemName, candidates) {
-  const itemTokens = normalizeTokens(itemName);
+  const itemTokens = normalizeTokens(stripMealAnnotation(itemName));
   const list = Array.isArray(candidates) ? candidates : [];
   const scored = list
     .filter((candidate) => candidate && candidate.asin)
@@ -51,7 +67,7 @@ function pickBest(itemName, candidates) {
   return { decision: 'ambiguous', best: null, scored };
 }
 
-const GroceryMatcher = { normalizeTokens, normalizeKey, scoreTitle, pickBest };
+const GroceryMatcher = { normalizeTokens, normalizeKey, scoreTitle, pickBest, stripMealAnnotation };
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = GroceryMatcher;
