@@ -181,22 +181,42 @@ function pollFor(getValue, timeoutMs, intervalMs) {
   });
 }
 
-function parseQsOptionId(span) {
+function parseQsOption(span) {
   try {
     const data = JSON.parse(span.getAttribute('data-qs-widget-dropdown-decl'));
-    return typeof data.id === 'number' ? data.id : null;
+    return {
+      id: typeof data.id === 'number' ? data.id : null,
+      qsUID: data.qsUID ? String(data.qsUID) : null,
+    };
+  } catch (err) {
+    return { id: null, qsUID: null };
+  }
+}
+
+// The buy box's fresh-add-to-cart declarative span carries JSON whose qsUID
+// names its OWN quantity widget (button id qs-widget-button-<qsUID>-announce)
+// and tags that widget's dropdown options. This is the only reliable link:
+// ALM pages also carry qs-widgets for cart-sidebar rows and carousels, and
+// clicking one of those mutates a DIFFERENT product's cart line (2026-07-07
+// debug log: soy milk's qty-4 click landed on the paper-plates line).
+function findBuyboxQsUID() {
+  const span = document.querySelector('span[data-action="fresh-add-to-cart"]');
+  if (!span) return null;
+  try {
+    const data = JSON.parse(span.getAttribute('data-fresh-add-to-cart'));
+    return data && data.qsUID ? String(data.qsUID) : null;
   } catch (err) {
     return null;
   }
 }
 
 // Set quantity on a pinned product page. Classic retail pages use a
-// #quantity <select>; ALM (Whole Foods) buyboxes use the custom qs-widget
-// dropdown — a button that renders a listbox on click, each option a
-// span[data-action="qs-widget-dropdown-decl"] whose JSON carries id: N
-// (live DOM captured 2026-07-06). The listbox offers a bounded range, so a
-// larger request clamps to the highest offered quantity. Returns an
-// outcome record that goes into the debug log via the added report.
+// #quantity <select>; ALM (Whole Foods) buy boxes use the custom qs-widget
+// dropdown, which we drive by clicking — but ONLY the widget tied to the
+// buy box via qsUID (see findBuyboxQsUID). If no widget can be tied to the
+// buy box, we touch nothing: mutating the wrong cart line is worse than
+// shipping quantity 1. Returns an outcome record for the debug log;
+// `verified` reports whether the widget label read "Qty: N" afterward.
 async function setPinnedQuantity(desired) {
   if (!desired || desired <= 1) {
     return { requested: desired || 1, set: 1, method: 'default' };
@@ -215,7 +235,13 @@ async function setPinnedQuantity(desired) {
     return { requested: desired, set: desired, method: 'select' };
   }
 
-  const qsButton = document.querySelector('button[id^="qs-widget-button-"]');
+  const qsUID = findBuyboxQsUID();
+  if (!qsUID) {
+    return { requested: desired, set: 1, method: 'no-buybox-widget' };
+  }
+  const qsButton =
+    document.getElementById(`qs-widget-button-${qsUID}-announce`) ||
+    document.querySelector(`button[id^="qs-widget-button-${qsUID}"]`);
   if (!qsButton) {
     return { requested: desired, set: 1, method: 'no-quantity-control' };
   }
@@ -223,10 +249,10 @@ async function setPinnedQuantity(desired) {
 
   const optionSpans = await pollFor(
     () => {
-      const spans = document.querySelectorAll(
-        'span[data-action="qs-widget-dropdown-decl"]'
-      );
-      return spans.length > 0 ? Array.from(spans) : null;
+      const spans = Array.from(
+        document.querySelectorAll('span[data-action="qs-widget-dropdown-decl"]')
+      ).filter((span) => parseQsOption(span).qsUID === qsUID);
+      return spans.length > 0 ? spans : null;
     },
     3000,
     150
@@ -236,7 +262,7 @@ async function setPinnedQuantity(desired) {
   }
 
   const options = optionSpans
-    .map((span) => ({ span, id: parseQsOptionId(span) }))
+    .map((span) => ({ span, id: parseQsOption(span).id }))
     .filter((opt) => opt.id !== null)
     .sort((a, b) => a.id - b.id);
   const exact = options.find((opt) => opt.id === desired);
@@ -246,10 +272,20 @@ async function setPinnedQuantity(desired) {
   }
   const target = best.span.querySelector('li') || best.span;
   target.click();
+
+  // Confirm the click actually landed: the widget label updates to the new
+  // quantity. If it never does, record verified:false so the debug log
+  // shows the truth instead of our assumption.
+  const verified = await pollFor(
+    () => (new RegExp(`Qty:\\s*${best.id}\\b`).test(qsButton.textContent) ? true : null),
+    1600,
+    150
+  );
   return {
     requested: desired,
     set: best.id,
     method: exact ? 'qs-widget' : 'qs-widget-clamped',
+    verified: Boolean(verified),
   };
 }
 
@@ -262,6 +298,7 @@ function findPinnedAddToCartControl() {
   return (
     document.getElementById('add-to-cart-button') ||
     document.getElementById('freshAddToCartButton') ||
+    document.querySelector('span[data-action="fresh-add-to-cart"] input.a-button-input') ||
     document.querySelector(
       'input[name="submit.addToCart"], button[name="submit.addToCart"]'
     ) ||

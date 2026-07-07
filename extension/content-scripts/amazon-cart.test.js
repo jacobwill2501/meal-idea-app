@@ -257,12 +257,26 @@ describe('amazon-cart content script', () => {
       )
       .join('');
     document.body.innerHTML = `
+      <span class="a-declarative" data-action="fresh-add-to-cart"
+        data-fresh-add-to-cart='{"qsUID":"atfc-1","asin":"B001"}'>
+        <span id="freshAddToCartButton" class="a-button"><input class="a-button-input" type="submit"></span>
+      </span>
       <span id="qs-widget-button-atfc-1" class="a-button"><span class="a-button-inner">
         <button id="qs-widget-button-atfc-1-announce" type="button">Qty: 1</button>
       </span></span>
       <div id="qs-dropdown">${options}</div>
-      <span id="freshAddToCartButton" class="a-button"><input class="a-button-input" type="submit"></span>
     `;
+    // Simulate Amazon updating the widget label when an option is clicked —
+    // the implementation verifies this label to confirm the click landed.
+    document
+      .querySelectorAll('span[data-action="qs-widget-dropdown-decl"]')
+      .forEach((span) => {
+        const data = JSON.parse(span.getAttribute('data-qs-widget-dropdown-decl'));
+        span.querySelector('li').addEventListener('click', () => {
+          document.getElementById('qs-widget-button-atfc-1-announce').textContent =
+            `Qty: ${data.id}`;
+        });
+      });
     document.getElementById('freshAddToCartButton').addEventListener('click', clickSpy);
   }
 
@@ -289,7 +303,12 @@ describe('amazon-cart content script', () => {
     expect(clickSpy).toHaveBeenCalledTimes(1);
     const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
     expect(report).toMatchObject({ index: 0, status: 'added' });
-    expect(report.extra.quantity).toEqual({ requested: 3, set: 3, method: 'qs-widget' });
+    expect(report.extra.quantity).toEqual({
+      requested: 3,
+      set: 3,
+      method: 'qs-widget',
+      verified: true,
+    });
   });
 
   test('addPinned clamps to the highest offered qs-widget quantity', async () => {
@@ -317,6 +336,87 @@ describe('amazon-cart content script', () => {
       requested: 7,
       set: 5,
       method: 'qs-widget-clamped',
+      verified: true,
+    });
+  });
+
+  test('addPinned ignores non-buybox qs-widgets (cart-sidebar decoy)', async () => {
+    renderAlmProductPage(clickSpy, 5);
+    // Decoy widget like a cart-sidebar row's quantity control, FIRST in the
+    // document with a matching option id — clicking it would mutate a
+    // different product's cart line (the 2026-07-07 paper-plates bug).
+    const decoy = document.createElement('div');
+    decoy.innerHTML =
+      '<span id="qs-widget-button-ewc-9" class="a-button"><span class="a-button-inner">' +
+      '<button id="qs-widget-button-ewc-9-announce" type="button">Qty: 2</button></span></span>' +
+      '<span class="a-declarative" data-action="qs-widget-dropdown-decl" ' +
+      'data-qs-widget-dropdown-decl=\'{"qsUID":"ewc-9","id":4}\'>' +
+      '<li role="option" id="decoy-item-4">4</li></span>';
+    document.body.insertBefore(decoy, document.body.firstChild);
+    const decoySpy = jest.fn();
+    document
+      .getElementById('qs-widget-button-ewc-9-announce')
+      .addEventListener('click', decoySpy);
+    document.getElementById('decoy-item-4').addEventListener('click', decoySpy);
+
+    global.chrome = makeChromeFake({
+      'cs:pageReady': {
+        action: 'addPinned',
+        index: 0,
+        item: { name: 'soy milk', quantity: 4 },
+        pin: { asin: 'B001' },
+      },
+      'cs:requestClick': { granted: true },
+      'cs:reportResult': { ok: true },
+    });
+    require('./amazon-cart.js');
+    await flushAsync();
+
+    expect(decoySpy).not.toHaveBeenCalled();
+    const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
+    expect(report.extra.quantity).toEqual({
+      requested: 4,
+      set: 4,
+      method: 'qs-widget',
+      verified: true,
+    });
+  });
+
+  test('addPinned leaves every qs-widget alone when no buybox link exists', async () => {
+    // A widget is present but nothing ties it to the buy box (no
+    // fresh-add-to-cart span): never click it — wrong-line mutation is
+    // worse than shipping quantity 1.
+    document.body.innerHTML =
+      '<span id="qs-widget-button-ewc-9" class="a-button"><span class="a-button-inner">' +
+      '<button id="qs-widget-button-ewc-9-announce" type="button">Qty: 2</button></span></span>' +
+      '<button id="add-to-cart-button">Add to Cart</button>';
+    document.getElementById('add-to-cart-button').addEventListener('click', clickSpy);
+    const decoySpy = jest.fn();
+    document
+      .getElementById('qs-widget-button-ewc-9-announce')
+      .addEventListener('click', decoySpy);
+
+    global.chrome = makeChromeFake({
+      'cs:pageReady': {
+        action: 'addPinned',
+        index: 0,
+        item: { name: 'eggs', quantity: 3 },
+        pin: { asin: 'B002' },
+      },
+      'cs:requestClick': { granted: true },
+      'cs:reportResult': { ok: true },
+    });
+    require('./amazon-cart.js');
+    await flushAsync();
+
+    expect(decoySpy).not.toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    const report = global.chrome.sent.find((m) => m.type === 'cs:reportResult');
+    expect(report).toMatchObject({ index: 0, status: 'added' });
+    expect(report.extra.quantity).toEqual({
+      requested: 3,
+      set: 1,
+      method: 'no-buybox-widget',
     });
   });
 });
